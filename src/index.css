@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-[#0b1d16] text-white min-h-screen;
+    background-color: #0b1d16; /* Fallback/Hard override */
+  }
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  @apply bg-white/5 backdrop-blur-md border border-white/10;
+}
+
+.glass-card {
+  @apply bg-white/5 backdrop-blur-sm border border-white/5 hover:bg-white/10 transition-all duration-300;
+}
