@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Union
 
-app = FastAPI()
+app = FastAPI(title="InvIntel API", root_path="/api")
 
 # CORS Configuration
 origins = ["*"]
