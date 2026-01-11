@@ -220,14 +220,29 @@ async def receive_news(news: Union[NewsItem, List[NewsItem]]):
             if item.empresas is None:
                  item.empresas = []
 
-        # 3. Convert to dict and save
-        data = item.dict()
+        # 3. Construct Payload for Supabase (Strict Mapping)
+        # Using item fields directly to handle aliases and updates
         
-        # Final safety check before Supabase wrapper access (redundant but safe)
-        if not data.get('sentimiento'): data['sentimiento'] = 'Neutro'
-        if not data.get('resumen'): data['resumen'] = 'Resumen no disponible'
+        # Ensure values for required fields
+        final_sentiment = item.sentimiento if item.sentimiento else "Neutro"
+        final_summary = item.resumen if item.resumen else "Resumen no disponible"
+        
+        payload = {
+            "titulo": item.titulo,
+            "resumen": final_summary,
+            "enlace": item.enlace,
+            "fecha": item.fecha,
+            "sentimiento": final_sentiment,
+            "score": item.sentiment_score, # Mapped from sentiment_score to score
+            "category": item.category,
+            "tickers": item.tickers,
+            "empresas": item.empresas # Optional compatibility
+        }
+        
+        # Log payload for debug (optional, can be removed)
+        # print(f"Payload to Supabase: {payload}")
 
-        if await save_to_supabase(data):
+        if await save_to_supabase(payload):
             saved_count += 1
         
     return {"status": "success", "received_count": len(incoming_news), "saved_count": saved_count}
