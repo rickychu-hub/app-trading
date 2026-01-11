@@ -67,7 +67,7 @@ async def analyze_with_gemini(text: str) -> dict:
         """
         
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-pro',
             contents=prompt
         )
         
@@ -203,20 +203,30 @@ async def receive_news(news: Union[NewsItem, List[NewsItem]]):
                     item.resumen = analysis_result['summary']
                     
         except Exception as e:
-            print(f"Error merging AI analysis: {e}. Using defaults.")
-            # Verify defaults again just in case
+            print(f"Error merging AI analysis: {e}. Using strict defaults.")
+            # FORCE defaults to prevent Supabase 400
+            if not item.sentimiento or item.sentimiento == "Neutro":
+                item.sentimiento = "Neutro"
+            
+            # Ensure summary is NEVER None
+            if not item.resumen:
+                item.resumen = item.titulo if item.titulo else "Resumen no disponible por error de API"
+            
+            # Default enrichment fields
             if not item.category:
                  item.category = "General"
             if item.sentiment_score is None:
                  item.sentiment_score = 0.0
+            if item.empresas is None:
+                 item.empresas = []
 
         # 3. Convert to dict and save
         data = item.dict()
         
-        # Final safety check before Supabase
+        # Final safety check before Supabase wrapper access (redundant but safe)
         if not data.get('sentimiento'): data['sentimiento'] = 'Neutro'
-        if not data.get('resumen'): data['resumen'] = 'Sin resumen'
-        
+        if not data.get('resumen'): data['resumen'] = 'Resumen no disponible'
+
         if await save_to_supabase(data):
             saved_count += 1
         
