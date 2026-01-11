@@ -91,7 +91,7 @@ async def receive_news(news: Union[NewsItem, List[NewsItem]]):
         
     return {"status": "success", "received_count": len(incoming_news), "saved_count": saved_count}
 
-@app.get("/api/news")
+@app.get("/news")
 async def get_news():
     return await fetch_from_supabase()
 
