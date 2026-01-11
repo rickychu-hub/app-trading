@@ -53,16 +53,18 @@ async def analyze_with_gemini(text: str) -> dict:
         client = genai.Client(api_key=GEMINI_API_KEY)
         
         prompt = f"""
-        Act as a Senior Financial Analyst. Analyze the following news text and return a strict JSON object (no markdown, no backticks).
+        Actúa como un Analista Financiero Senior. Analiza la siguiente noticia y devuelve un objeto JSON estricto (sin markdown, sin backticks).
+        Traduce y resume TODO el contenido al ESPAÑOL.
         
-        News: "{text}"
+        Noticia: "{text}"
         
-        Output Structure:
+        Estructura de Salida:
         {{
-            "sentiment_score": <float between -1.0 and 1.0>,
-            "category": <one of ["Crypto", "Stocks", "Forex", "Economy"]>,
-            "tickers": <list of strings, e.g. ["$BTC", "$AAPL"]>,
-            "summary": <string, max 15 words focused on price action>
+            "sentiment_score": <float entre -1.0 y 1.0>,
+            "sentiment": <"Positivo", "Negativo" o "Neutro">,
+            "category": <uno de ["Crypto", "Stocks", "Forex", "Economy"]>,
+            "tickers": <lista de strings, ej: ["$BTC", "$AAPL"]>,
+            "summary": <string en ESPAÑOL, max 15 palabras enfocado en acción del precio>
         }}
         """
         
@@ -189,6 +191,18 @@ async def receive_news(news: Union[NewsItem, List[NewsItem]]):
                 if 'sentiment_score' in analysis_result:
                     item.sentiment_score = analysis_result['sentiment_score']
                 
+                # Logic: Force sentiment text based on score for consistency
+                if item.sentiment_score is not None:
+                    if item.sentiment_score > 0.3:
+                        item.sentimiento = "Positivo"
+                    elif item.sentiment_score < -0.3:
+                        item.sentimiento = "Negativo"
+                    else:
+                        item.sentimiento = "Neutro"
+                elif 'sentiment' in analysis_result:
+                    # Fallback to AI label if score is missing (rare)
+                    item.sentimiento = analysis_result['sentiment']
+
                 if 'category' in analysis_result:
                     item.category = analysis_result['category']
                 
