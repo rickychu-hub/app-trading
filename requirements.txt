@@ -2,4 +2,4 @@ fastapi
 uvicorn
 pydantic
 httpx
-google-genai
+google-genai>=0.2.0

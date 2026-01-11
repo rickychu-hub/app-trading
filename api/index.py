@@ -170,31 +170,52 @@ async def receive_news(news: Union[NewsItem, List[NewsItem]]):
     for item in incoming_news:
         print(f"Noticia recibida: {item.titulo}")
         
+        # Initialize defaults if missing
+        if not item.sentimiento:
+            item.sentimiento = "Neutro"
+        if not item.resumen:
+             # If summary is missing, try to use title or default
+            item.resumen = item.titulo if item.titulo else "Sin resumen disponible"
+
         # 1. Analyze with Gemini
         # Combine title and summary for better context
-        full_text = f"{item.titulo} - {item.resumen}"
-        analysis_result = await analyze_with_gemini(full_text)
+        full_text = f"{item.titulo or ''} - {item.resumen or ''}"
         
-        # 2. Merge analysis into item
-        # We manually update the Pydantic model fields if analysis provided them
-        if analysis_result:
-            if 'sentiment_score' in analysis_result:
-                item.sentiment_score = analysis_result['sentiment_score']
-            if 'category' in analysis_result:
-                item.category = analysis_result['category']
-            if 'tickers' in analysis_result:
-                item.tickers = analysis_result['tickers']
-                # Sync logic: if we have tickers, update 'empresas' too for legacy compat
-                item.empresas = analysis_result['tickers'] 
-            if 'summary' in analysis_result:
-                # Valid "summary" from AI
-                # Store in AI specific field
-                item.summary_ai = analysis_result['summary']
-                # Overwrite 'resumen' for frontend display
-                item.resumen = analysis_result['summary']
-        
+        try:
+            analysis_result = await analyze_with_gemini(full_text)
+            
+            # 2. Merge analysis into item
+            if analysis_result:
+                if 'sentiment_score' in analysis_result:
+                    item.sentiment_score = analysis_result['sentiment_score']
+                
+                if 'category' in analysis_result:
+                    item.category = analysis_result['category']
+                
+                if 'tickers' in analysis_result:
+                    item.tickers = analysis_result['tickers']
+                    # Sync logic: if we have tickers, update 'empresas' too for legacy compat
+                    item.empresas = analysis_result['tickers'] 
+                
+                if 'summary' in analysis_result and analysis_result['summary']:
+                     # Valid "summary" from AI
+                    item.summary_ai = analysis_result['summary']
+                    item.resumen = analysis_result['summary']
+                    
+        except Exception as e:
+            print(f"Error merging AI analysis: {e}. Using defaults.")
+            # Verify defaults again just in case
+            if not item.category:
+                 item.category = "General"
+            if item.sentiment_score is None:
+                 item.sentiment_score = 0.0
+
         # 3. Convert to dict and save
         data = item.dict()
+        
+        # Final safety check before Supabase
+        if not data.get('sentimiento'): data['sentimiento'] = 'Neutro'
+        if not data.get('resumen'): data['resumen'] = 'Sin resumen'
         
         if await save_to_supabase(data):
             saved_count += 1
