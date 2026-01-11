@@ -44,8 +44,49 @@ const NewsCard: React.FC<NewsCardProps> = ({ item }) => {
 
     const styles = getSentimentStyles(item.sentimiento);
 
+    const handleSimulateTrade = async (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent card click
+
+        const defaultTicker = item.empresas && item.empresas.length > 0 ? item.empresas[0] : "";
+        const ticker = window.prompt("Ticker del activo:", defaultTicker);
+        if (!ticker) return;
+
+        const priceStr = window.prompt(`Precio de entrada para ${ticker}:`);
+        if (!priceStr) return;
+
+        const price = parseFloat(priceStr);
+        if (isNaN(price)) {
+            alert("Precio inválido");
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/trades", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ticker: ticker,
+                    entry_price: price,
+                    news_id: item.id,
+                    initial_score: item.sentiment_score || 0,
+                    status: "OPEN"
+                })
+            });
+
+            if (response.ok) {
+                alert("Trade simulado guardado correctamente.");
+                window.dispatchEvent(new Event('tradeResponse'));
+            } else {
+                alert("Error al guardar el trade.");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error de conexión");
+        }
+    };
+
     return (
-        <div className={`glass-card p-6 rounded-xl border ${styles.border} ${styles.glow} relative overflow-hidden group hover:-translate-y-1 transition-all duration-300`}>
+        <div className={`glass-card p-6 rounded-xl border ${styles.border} ${styles.glow} relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 flex flex-col`}>
             <div className="flex justify-between items-start mb-4">
                 <div className="flex gap-2">
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2 ${styles.badge}`}>
@@ -67,19 +108,28 @@ const NewsCard: React.FC<NewsCardProps> = ({ item }) => {
                 )}
             </div>
 
-            <p className="text-lg font-medium text-gray-100 mb-6 leading-relaxed">
+            <p className="text-lg font-medium text-gray-100 mb-6 leading-relaxed flex-grow">
                 {item.resumen}
             </p>
 
-            {item.empresas.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-auto">
-                    {item.empresas.map((empresa, idx) => (
-                        <span key={idx} className="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded border border-white/5">
-                            {empresa}
-                        </span>
-                    ))}
-                </div>
-            )}
+            <div className="flex justify-between items-end mt-4">
+                {item.empresas.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                        {item.empresas.map((empresa, idx) => (
+                            <span key={idx} className="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded border border-white/5">
+                                {empresa}
+                            </span>
+                        ))}
+                    </div>
+                ) : <div></div>}
+
+                <button
+                    onClick={handleSimulateTrade}
+                    className="ml-4 px-3 py-1.5 bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 rounded text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer z-10"
+                >
+                    <TrendingUp size={14} /> Simular Trade
+                </button>
+            </div>
 
             {/* Decorative gradient blob */}
             <div className={`absolute -right-10 -bottom-10 w-32 h-32 rounded-full blur-3xl opacity-10 ${item.sentimiento === 'Positivo' ? 'bg-accent' :
