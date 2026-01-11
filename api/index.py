@@ -59,7 +59,8 @@ async def fetch_from_supabase() -> List[dict]:
         print("Error: Supabase credentials not found.")
         return []
         
-    url = f"{SUPABASE_URL}/rest/v1/news?select=*&order=created_at.desc"
+    # Fetch 100 items to ensure we have enough after deduplication
+    url = f"{SUPABASE_URL}/rest/v1/news?select=*&order=created_at.desc&limit=100"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -69,7 +70,36 @@ async def fetch_from_supabase() -> List[dict]:
         try:
             response = await client.get(url, headers=headers)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            
+            # Deduplicate by title
+            seen_titles = set()
+            unique_news = []
+            
+            import random
+            categories = ['Crypto', 'Forex', 'Stock']
+            
+            for item in data:
+                title = item.get("titulo")
+                if title:
+                    # Normalize for comparison
+                    title_clean = title.strip()
+                    if title_clean not in seen_titles:
+                        seen_titles.add(title_clean)
+                        
+                        # Simulate Intelligence Data
+                        item['sentiment_score'] = round(random.uniform(-1.0, 1.0), 2)
+                        item['category'] = random.choice(categories)
+                        
+                        unique_news.append(item)
+                else:
+                    unique_news.append(item)
+                    
+                if len(unique_news) >= 20:
+                    break
+            
+            return unique_news
+            
         except Exception as e:
             print(f"Error fetching from Supabase: {e}")
             return []

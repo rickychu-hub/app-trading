@@ -33,15 +33,38 @@ const NewsCard: React.FC<NewsCardProps> = ({ item }) => {
         }
     };
 
+    const getCategoryColor = (cat?: string) => {
+        switch (cat) {
+            case 'Crypto': return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
+            case 'Forex': return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
+            case 'Stock': return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
+            default: return 'bg-white/5 text-gray-400 border-white/10';
+        }
+    };
+
     const styles = getSentimentStyles(item.sentimiento);
 
     return (
-        <div className={`glass-card p-6 rounded-xl border ${styles.border} ${styles.glow} relative overflow-hidden group hover:-translate-y-1`}>
+        <div className={`glass-card p-6 rounded-xl border ${styles.border} ${styles.glow} relative overflow-hidden group hover:-translate-y-1 transition-all duration-300`}>
             <div className="flex justify-between items-start mb-4">
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2 ${styles.badge}`}>
-                    {styles.icon}
-                    {item.sentimiento.toUpperCase()}
-                </span>
+                <div className="flex gap-2">
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2 ${styles.badge}`}>
+                        {styles.icon}
+                        {item.sentimiento.toUpperCase()}
+                    </span>
+                    {item.category && (
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getCategoryColor(item.category)}`}>
+                            {item.category}
+                        </span>
+                    )}
+                </div>
+                {item.sentiment_score !== undefined && (
+                    <div className={`flex items-center gap-1 text-xs font-mono px-2 py-1 rounded bg-black/50 ${item.sentiment_score > 0.2 ? 'text-green-400' :
+                            item.sentiment_score < -0.2 ? 'text-red-400' : 'text-gray-400'
+                        }`}>
+                        SCORE: {item.sentiment_score.toFixed(2)}
+                    </div>
+                )}
             </div>
 
             <p className="text-lg font-medium text-gray-100 mb-6 leading-relaxed">
