@@ -55,12 +55,20 @@ async def analyze_with_gemini(text: str) -> dict:
         prompt = f"""
         Actúa como un Analista Financiero Senior. Analiza la siguiente noticia y devuelve un objeto JSON estricto (sin markdown, sin backticks).
         Tu salida JSON debe estar ESTRICTAMENTE en ESPAÑOL. Traduce el título y el resumen. Si la noticia es técnica, mantén los términos financieros (tickers, ETF) pero explica el contexto en español.
+
+        DEFINICIÓN DE SENTIMENT SCORE (CRÍTICO):
+        +1.0: Extremadamente Bullish (El precio va a explotar hacia arriba, récords históricos, adopción masiva).
+        0.0: Neutral (Información técnica sin impacto en precio).
+        -1.0: Extremadamente Bearish (Hacks, prohibiciones, el precio se va a desplomar).
+
+        INSTRUCCIÓN DE RAZONAMIENTO:
+        Antes de asignar el score, pregúntate: ¿Esta noticia hará que el precio SUBA (positivo) o BAJE (negativo)? Asigna el signo matemático basándote estrictamente en la acción del precio esperada.
         
         Noticia: "{text}"
         
         Estructura de Salida:
         {{
-            "sentiment_score": <float entre -1.0 y 1.0>,
+            "sentiment_score": <float entre -1.0 y 1.0 basado en la escala anterior>,
             "sentiment": <"Positivo", "Negativo" o "Neutro">,
             "category": <uno de ["Crypto", "Stocks", "Forex", "Economy"]>,
             "tickers": <lista de strings, ej: ["$BTC", "$AAPL"]>,
