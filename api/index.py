@@ -54,7 +54,7 @@ async def analyze_with_gemini(text: str) -> dict:
         
         prompt = f"""
         Actúa como un Analista Financiero Senior. Analiza la siguiente noticia y devuelve un objeto JSON estricto (sin markdown, sin backticks).
-        Traduce y resume TODO el contenido al ESPAÑOL.
+        Tu salida JSON debe estar ESTRICTAMENTE en ESPAÑOL. Traduce el título y el resumen. Si la noticia es técnica, mantén los términos financieros (tickers, ETF) pero explica el contexto en español.
         
         Noticia: "{text}"
         
@@ -191,17 +191,15 @@ async def receive_news(news: Union[NewsItem, List[NewsItem]]):
                 if 'sentiment_score' in analysis_result:
                     item.sentiment_score = analysis_result['sentiment_score']
                 
-                # Logic: Force sentiment text based on score for consistency
-                if item.sentiment_score is not None:
-                    if item.sentiment_score > 0.3:
-                        item.sentimiento = "Positivo"
-                    elif item.sentiment_score < -0.3:
-                        item.sentimiento = "Negativo"
-                    else:
-                        item.sentimiento = "Neutro"
-                elif 'sentiment' in analysis_result:
-                    # Fallback to AI label if score is missing (rare)
-                    item.sentimiento = analysis_result['sentiment']
+                # Logic: Aggressive Labeling
+                score = item.sentiment_score if item.sentiment_score is not None else 0
+                
+                if score >= 0.2:
+                    item.sentimiento = "Positivo"
+                elif score <= -0.2:
+                    item.sentimiento = "Negativo"
+                else:
+                    item.sentimiento = "Neutral"
 
                 if 'category' in analysis_result:
                     item.category = analysis_result['category']
