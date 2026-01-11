@@ -1,10 +1,10 @@
 import os
 import httpx
-import google.generativeai as genai
+from google import genai
 import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Union
 import random # For fallback simulation
 
@@ -26,21 +26,22 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-
 # Data Model
 class NewsItem(BaseModel):
-    titulo: Optional[str] = None
-    resumen: str
-    sentimiento: str = "Neutro" # Default
-    empresas: Optional[List[str]] = []
-    enlace: Optional[str] = None
-    fecha: Optional[str] = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    titulo: Optional[str] = Field(None, title="Title of the news", alias="title")
+    resumen: str = Field(..., title="Summary of the news", alias="summary") # 'summary' alias might conflict with output summary field, but typically input is 'description' or 'summary'
+    sentimiento: str = Field("Neutro", alias="sentiment")  # "Positivo", "Negativo", "Neutro"
+    empresas: Optional[List[str]] = Field([], alias="companies")
+    enlace: Optional[str] = Field(None, alias="url")
+    fecha: Optional[str] = Field(None, alias="date")
+    
+    # Enrichment fields (internal or from explicit input)
     sentiment_score: Optional[float] = None
     category: Optional[str] = None
     tickers: Optional[List[str]] = []
-    summary: Optional[str] = None
+    summary_ai: Optional[str] = Field(None, alias="ai_summary") # Different from input summary/resumen
 
 # Gemini Analysis Function
 async def analyze_with_gemini(text: str) -> dict:
@@ -49,7 +50,7 @@ async def analyze_with_gemini(text: str) -> dict:
         return {}
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        client = genai.Client(api_key=GEMINI_API_KEY)
         
         prompt = f"""
         Act as a Senior Financial Analyst. Analyze the following news text and return a strict JSON object (no markdown, no backticks).
@@ -65,8 +66,12 @@ async def analyze_with_gemini(text: str) -> dict:
         }}
         """
         
-        response = model.generate_content(prompt)
-        # Clean response if necessary (remove markdown code blocks provided by Gemini sometimes)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt
+        )
+        
+        # Clean response if necessary
         content = response.text.replace('```json', '').replace('```', '').strip()
         analysis = json.loads(content)
         return analysis
@@ -182,12 +187,11 @@ async def receive_news(news: Union[NewsItem, List[NewsItem]]):
                 # Sync logic: if we have tickers, update 'empresas' too for legacy compat
                 item.empresas = analysis_result['tickers'] 
             if 'summary' in analysis_result:
-                # User asked to overwrite summary? 
-                # "summary: Un resumen... enfocado en la acción del precio."
-                # Maybe we store it in a new field or overwrite 'resumen'?
-                # Let's overwrite 'resumen' because frontend parses 'resumen'.
+                # Valid "summary" from AI
+                # Store in AI specific field
+                item.summary_ai = analysis_result['summary']
+                # Overwrite 'resumen' for frontend display
                 item.resumen = analysis_result['summary']
-                item.summary = analysis_result['summary']
         
         # 3. Convert to dict and save
         data = item.dict()
