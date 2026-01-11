@@ -67,7 +67,7 @@ async def analyze_with_gemini(text: str) -> dict:
         """
         
         response = client.models.generate_content(
-            model='gemini-pro',
+            model='gemini-2.0-flash',
             contents=prompt
         )
         
