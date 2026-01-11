@@ -1,9 +1,12 @@
 import os
 import httpx
+import google.generativeai as genai
+import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Union
+import random # For fallback simulation
 
 app = FastAPI(title="InvIntel API", root_path="/api")
 
@@ -21,15 +24,55 @@ app.add_middleware(
 # Configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # Data Model
 class NewsItem(BaseModel):
     titulo: Optional[str] = None
     resumen: str
-    sentimiento: str  # "Positivo", "Negativo", "Neutro"
+    sentimiento: str = "Neutro" # Default
     empresas: Optional[List[str]] = []
     enlace: Optional[str] = None
     fecha: Optional[str] = None
+    sentiment_score: Optional[float] = None
+    category: Optional[str] = None
+    tickers: Optional[List[str]] = []
+    summary: Optional[str] = None
+
+# Gemini Analysis Function
+async def analyze_with_gemini(text: str) -> dict:
+    if not GEMINI_API_KEY:
+        print("Warning: GEMINI_API_KEY not found. Skipping AI analysis.")
+        return {}
+
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""
+        Act as a Senior Financial Analyst. Analyze the following news text and return a strict JSON object (no markdown, no backticks).
+        
+        News: "{text}"
+        
+        Output Structure:
+        {{
+            "sentiment_score": <float between -1.0 and 1.0>,
+            "category": <one of ["Crypto", "Stocks", "Forex", "Economy"]>,
+            "tickers": <list of strings, e.g. ["$BTC", "$AAPL"]>,
+            "summary": <string, max 15 words focused on price action>
+        }}
+        """
+        
+        response = model.generate_content(prompt)
+        # Clean response if necessary (remove markdown code blocks provided by Gemini sometimes)
+        content = response.text.replace('```json', '').replace('```', '').strip()
+        analysis = json.loads(content)
+        return analysis
+    except Exception as e:
+        print(f"Error analyzing with Gemini: {e}")
+        return {}
 
 # Helper functions for Supabase REST API
 async def save_to_supabase(data: dict) -> bool:
@@ -47,6 +90,9 @@ async def save_to_supabase(data: dict) -> bool:
     
     async with httpx.AsyncClient() as client:
         try:
+            # Note: If Supabase columns don't exist, this might error. 
+            # Ideally the user has prepared the DB or we use a JSONB column.
+            # We attempt to send all data.
             response = await client.post(url, json=data, headers=headers)
             response.raise_for_status()
             return True
@@ -59,7 +105,7 @@ async def fetch_from_supabase() -> List[dict]:
         print("Error: Supabase credentials not found.")
         return []
         
-    # Fetch 100 items to ensure we have enough after deduplication
+    # Fetch 100 items
     url = f"{SUPABASE_URL}/rest/v1/news?select=*&order=created_at.desc&limit=100"
     headers = {
         "apikey": SUPABASE_KEY,
@@ -76,21 +122,26 @@ async def fetch_from_supabase() -> List[dict]:
             seen_titles = set()
             unique_news = []
             
-            import random
-            categories = ['Crypto', 'Forex', 'Stock']
+            categories_fallback = ['Crypto', 'Forex', 'Stock']
             
             for item in data:
                 title = item.get("titulo")
                 if title:
-                    # Normalize for comparison
                     title_clean = title.strip()
                     if title_clean not in seen_titles:
                         seen_titles.add(title_clean)
                         
-                        # Simulate Intelligence Data
-                        item['sentiment_score'] = round(random.uniform(-1.0, 1.0), 2)
-                        item['category'] = random.choice(categories)
+                        # Fallback Simulation if fields missing
+                        if item.get('sentiment_score') is None:
+                             item['sentiment_score'] = round(random.uniform(-1.0, 1.0), 2)
                         
+                        if item.get('category') is None:
+                            item['category'] = random.choice(categories_fallback)
+                            
+                        # Ensure tickers exist if missing
+                        if item.get('tickers') is None:
+                             item['tickers'] = item.get('empresas', [])
+
                         unique_news.append(item)
                 else:
                     unique_news.append(item)
@@ -113,9 +164,34 @@ async def receive_news(news: Union[NewsItem, List[NewsItem]]):
     
     for item in incoming_news:
         print(f"Noticia recibida: {item.titulo}")
-        # Convert pydantic model to dict
+        
+        # 1. Analyze with Gemini
+        # Combine title and summary for better context
+        full_text = f"{item.titulo} - {item.resumen}"
+        analysis_result = await analyze_with_gemini(full_text)
+        
+        # 2. Merge analysis into item
+        # We manually update the Pydantic model fields if analysis provided them
+        if analysis_result:
+            if 'sentiment_score' in analysis_result:
+                item.sentiment_score = analysis_result['sentiment_score']
+            if 'category' in analysis_result:
+                item.category = analysis_result['category']
+            if 'tickers' in analysis_result:
+                item.tickers = analysis_result['tickers']
+                # Sync logic: if we have tickers, update 'empresas' too for legacy compat
+                item.empresas = analysis_result['tickers'] 
+            if 'summary' in analysis_result:
+                # User asked to overwrite summary? 
+                # "summary: Un resumen... enfocado en la acción del precio."
+                # Maybe we store it in a new field or overwrite 'resumen'?
+                # Let's overwrite 'resumen' because frontend parses 'resumen'.
+                item.resumen = analysis_result['summary']
+                item.summary = analysis_result['summary']
+        
+        # 3. Convert to dict and save
         data = item.dict()
-        # Insert into Supabase using REST API
+        
         if await save_to_supabase(data):
             saved_count += 1
         
