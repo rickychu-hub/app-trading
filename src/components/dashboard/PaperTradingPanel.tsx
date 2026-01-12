@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import PortfolioStats from './PortfolioStats';
 import AssetDetailModal from './AssetDetailModal';
+import AIPortfolioInsights from './AIPortfolioInsights';
 import { Loader2, TrendingUp, TrendingDown, XCircle, AlertTriangle } from 'lucide-react';
 
 interface Trade {
@@ -170,7 +171,7 @@ const PaperTradingPanel: React.FC = () => {
         return { invested, current };
     }, [trades, currentPrices]);
 
-    const getSignal = (trade: Trade, currentPrice: number, pnlPercent: number) => {
+    const getSignal = (trade: Trade, pnlPercent: number) => {
         if (pnlPercent > 5) {
             return (
                 <span className="flex items-center gap-1 text-green-400 font-bold bg-green-400/10 px-2 py-1 rounded animate-pulse">
@@ -202,6 +203,8 @@ const PaperTradingPanel: React.FC = () => {
                 investedCapital={metrics.invested}
                 currentValue={metrics.current}
             />
+
+            <AIPortfolioInsights trades={trades} currentPrices={currentPrices} />
 
             <div className="glass-panel rounded-2xl p-8 border border-white/10">
                 <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
@@ -277,7 +280,7 @@ const PaperTradingPanel: React.FC = () => {
                                             </td>
                                             <td className="py-4 px-4 text-center">
                                                 <div className="inline-block min-w-[120px] text-center text-xs font-bold">
-                                                    {getSignal(trade, currentPrice, pnlPercent)}
+                                                    {getSignal(trade, pnlPercent)}
                                                 </div>
                                             </td>
                                             <td className="py-4 px-4 text-right">

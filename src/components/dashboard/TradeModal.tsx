@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 interface TradeModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (ticker: string, price: string) => void;
+    onConfirm: (ticker: string, price: string, amount: string) => void;
     initialTicker: string;
 }
 
@@ -21,7 +21,7 @@ const TradeModal: React.FC<TradeModalProps> = ({ isOpen, onClose, onConfirm, ini
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onConfirm(ticker, price);
+        onConfirm(ticker, price, amount);
     };
 
     return (
