@@ -18,50 +18,23 @@ interface Trade {
 }
 
 const TICKER_MAP: Record<string, string> = {
-    'BTC': 'bitcoin',
-    'ETH': 'ethereum',
-    'SOL': 'solana',
-    'BNB': 'binancecoin',
-    'XRP': 'ripple',
-    'ADA': 'cardano',
-    'AVAX': 'avalanche-2',
-    'DOGE': 'dogecoin',
-    'DOT': 'polkadot',
-    'TRX': 'tron',
-    'LINK': 'chainlink',
-    'MATIC': 'matic-network',
-    'SHIB': 'shiba-inu',
-    'LTC': 'litecoin',
-    'BCH': 'bitcoin-cash',
-    'UNI': 'uniswap',
-    'ATOM': 'cosmos',
-    'XLM': 'stellar',
-    'ETC': 'ethereum-classic',
-    'FIL': 'filecoin',
-    'HBAR': 'hedera-hashgraph',
-    'APT': 'aptos',
-    'NEAR': 'near',
-    'VET': 'vechain',
-    'QNT': 'quant',
-    'GRT': 'the-graph',
-    'AAVE': 'aave',
-    'ALGO': 'algorand',
-    'STX': 'blockstack',
-    'IMX': 'immutable-x',
-    'EOS': 'eos',
-    'XTZ': 'tezos',
-    'SAND': 'the-sandbox',
-    'THETA': 'theta-token',
-    'AXS': 'axie-infinity',
-    'MANA': 'decentraland',
-    'FTM': 'fantom',
-    'BKKT': 'bakkt'
+    'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'BNB': 'binancecoin',
+    'XRP': 'ripple', 'ADA': 'cardano', 'AVAX': 'avalanche-2', 'DOGE': 'dogecoin',
+    'DOT': 'polkadot', 'TRX': 'tron', 'LINK': 'chainlink', 'MATIC': 'matic-network',
+    'SHIB': 'shiba-inu', 'LTC': 'litecoin', 'UNI': 'uniswap', 'ATOM': 'cosmos',
+    'XLM': 'stellar', 'ETC': 'ethereum-classic', 'FIL': 'filecoin', 'HBAR': 'hedera-hashgraph',
+    'APT': 'aptos', 'NEAR': 'near', 'VET': 'vechain', 'QNT': 'quant', 'GRT': 'the-graph',
+    'AAVE': 'aave', 'ALGO': 'algorand', 'STX': 'blockstack', 'IMX': 'immutable-x',
+    'EOS': 'eos', 'XTZ': 'tezos', 'SAND': 'the-sandbox', 'THETA': 'theta-token',
+    'AXS': 'axie-infinity', 'MANA': 'decentraland', 'FTM': 'fantom', 'PEPE': 'pepe',
+    'RNDR': 'render-token', 'INJ': 'injective-protocol', 'LDO': 'lido-dao'
 };
 
 const getCoingeckoId = (ticker: string) => {
-    // 1. Remove spaces, 2. Remove $ prefix, 3. Uppercase
-    const clean = ticker.trim().replace(/^\$/, '').toUpperCase();
-    return TICKER_MAP[clean];
+    // 1. Remove $ prefix, 2. Remove spaces, 3. Uppercase
+    const clean = ticker.replace(/\$/g, '').trim().toUpperCase();
+    // Return mapped ID or fallback to lowercase ticker
+    return TICKER_MAP[clean] || clean.toLowerCase();
 };
 
 const PaperTradingPanel: React.FC = () => {
@@ -205,14 +178,77 @@ const PaperTradingPanel: React.FC = () => {
         return { invested, current };
     }, [trades, currentPrices]);
 
+    const [algoSignals, setAlgoSignals] = useState<Record<number, { signal: string, score: number, reason: string }>>({});
+
+    // Fetch News for AI Analysis
+    useEffect(() => {
+        const analyzeHoldings = async () => {
+            if (trades.length === 0) return;
+
+            try {
+                const res = await fetch('/api/news');
+                if (!res.ok) return;
+                const newsItems: any[] = await res.json();
+
+                const newSignals: Record<number, { signal: string, score: number, reason: string }> = {};
+                const now = new Date();
+                const oneDayMs = 24 * 60 * 60 * 1000;
+
+                trades.forEach(trade => {
+                    // Filter news for this ticker (< 24h)
+                    const relevantNews = newsItems.filter(n => {
+                        const newsDate = new Date(n.created_at || n.fecha || new Date());
+                        const isRecent = (now.getTime() - newsDate.getTime()) < oneDayMs;
+                        // Match ticker in tickers array or title/summary text
+                        const referencesTicker = (n.tickers && n.tickers.includes(trade.ticker)) ||
+                            (n.title && n.title.toUpperCase().includes(trade.ticker)) ||
+                            (n.resumen && n.resumen.toUpperCase().includes(trade.ticker));
+                        return isRecent && referencesTicker;
+                    });
+
+                    // Sort by date desc (just in case)
+                    relevantNews.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                    const recent3 = relevantNews.slice(0, 3);
+
+                    if (recent3.length > 0) {
+                        const avgScore = recent3.reduce((acc, curr) => acc + (curr.score || curr.sentiment_score || 0), 0) / recent3.length;
+
+                        let signal = "NEUTRAL";
+                        let reason = "Sin cambios fundamentales.";
+
+                        if (avgScore > 0.3) { // Lower threshold for testing
+                            signal = "MANTENER 🟢";
+                            reason = "Tendencia positiva en noticias recientes.";
+                        } else if (avgScore < -0.2) {
+                            signal = "VENTA SUGERIDA 🔴";
+                            reason = "Noticias negativas recientes detectadas.";
+                        }
+
+                        newSignals[trade.id] = { signal, score: avgScore, reason };
+                    } else {
+                        newSignals[trade.id] = { signal: "NEUTRAL ⚪", score: 0, reason: "Sin noticias recientes." };
+                    }
+                });
+
+                setAlgoSignals(newSignals);
+
+            } catch (e) {
+                console.error("AI Analysis Failed:", e);
+            }
+        };
+
+        analyzeHoldings();
+    }, [trades]); // Re-run when trades change
+
     const getSignal = (trade: Trade, pnlPercent: number) => {
-        if (pnlPercent > 5) {
+        // 1. Take Profit / Stop Loss (Hard Rules) override AI
+        if (pnlPercent > 10) {
             return (
                 <span className="flex items-center gap-1 text-green-400 font-bold bg-green-400/10 px-2 py-1 rounded animate-pulse">
                     <TrendingUp size={14} /> TAKE PROFIT
                 </span>
             );
-        } else if (pnlPercent < -3) {
+        } else if (pnlPercent < -5) {
             return (
                 <span className="flex items-center gap-1 text-red-500 font-bold bg-red-500/10 px-2 py-1 rounded animate-pulse">
                     <AlertTriangle size={14} /> STOP LOSS
@@ -220,6 +256,19 @@ const PaperTradingPanel: React.FC = () => {
             );
         }
 
+        // 2. AI Analysis Signal
+        const aiAnalysis = algoSignals[trade.id];
+        if (aiAnalysis) {
+            if (aiAnalysis.signal.includes("VENTA")) {
+                return <span className="text-red-400 font-bold flex items-center gap-1"><TrendingDown size={14} /> {aiAnalysis.signal}</span>;
+            }
+            if (aiAnalysis.signal.includes("MANTENER")) {
+                return <span className="text-green-400 font-bold flex items-center gap-1"><TrendingUp size={14} /> {aiAnalysis.signal}</span>;
+            }
+            return <span className="text-gray-400 text-xs">{aiAnalysis.signal}</span>;
+        }
+
+        // 3. Fallback to existing logic if analysis not ready
         if (trade.latest_sentiment_score !== undefined) {
             if (trade.latest_sentiment_score <= -0.4) {
                 return <span className="text-red-400 flex items-center gap-1"><TrendingDown size={14} /> BEARISH AI</span>;
@@ -262,7 +311,7 @@ const PaperTradingPanel: React.FC = () => {
                                     <th className="py-4 px-4 text-right">Inversión</th>
                                     <th className="py-4 px-4 text-right">Precio Actual</th>
                                     <th className="py-4 px-4 text-right">P&L</th>
-                                    <th className="py-4 px-4 text-center">Señal</th>
+                                    <th className="py-4 px-4 text-center">Estado Actual (IA)</th>
                                     <th className="py-4 px-4 text-right">Acción</th>
                                 </tr>
                             </thead>

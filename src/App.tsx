@@ -3,10 +3,11 @@ import Layout from './components/layout/Layout';
 import NewsIntelligencePanel from './components/dashboard/NewsIntelligencePanel';
 import PaperTradingPanel from './components/dashboard/PaperTradingPanel';
 import TradeModal from './components/dashboard/TradeModal';
+import TradingJournalPanel from './components/dashboard/TradingJournalPanel';
 import type { NewsItem } from './data/mockData';
 
 function App() {
-  const [activeView, setActiveView] = useState<'news' | 'portfolio'>('news');
+  const [activeView, setActiveView] = useState<'news' | 'portfolio' | 'journal'>('news');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
@@ -57,19 +58,23 @@ function App() {
     <Layout activeView={activeView} onViewChange={setActiveView}>
       <div className="mb-8">
         <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-          {activeView === 'news' ? 'Dashboard General' : 'Portfolio Simulado'}
+          {activeView === 'news' ? 'Dashboard General' : activeView === 'portfolio' ? 'Portfolio Simulado' : 'Diario de Trading Inteligente'}
         </h2>
         <p className="text-gray-400">
           {activeView === 'news'
             ? 'Bienvenido a su centro de inteligencia financiera.'
-            : 'Gestión y seguimiento de operaciones simuladas.'}
+            : activeView === 'portfolio'
+              ? 'Gestión y seguimiento de operaciones simuladas.'
+              : 'Análisis automatizado de sus operaciones pasadas.'}
         </p>
       </div>
 
       {activeView === 'news' ? (
         <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
-      ) : (
+      ) : activeView === 'portfolio' ? (
         <PaperTradingPanel />
+      ) : (
+        <TradingJournalPanel />
       )}
 
       <TradeModal

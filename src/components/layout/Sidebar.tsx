@@ -1,16 +1,16 @@
 import React from 'react';
-import { LayoutDashboard, Newspaper, Briefcase, Settings } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Settings, FileText } from 'lucide-react';
 
 interface SidebarProps {
-    activeView: 'news' | 'portfolio';
-    onViewChange: (view: 'news' | 'portfolio') => void;
+    activeView: 'news' | 'portfolio' | 'journal';
+    onViewChange: (view: 'news' | 'portfolio' | 'journal') => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
     const navItems = [
         { icon: LayoutDashboard, label: "Dashboard", id: 'news', active: activeView === 'news' },
-        { icon: Newspaper, label: "Noticias", id: 'news', active: false }, // Keeping consistent or disable? User said 'Grid/Dashboard' -> news. 'Noticias' -> maybe also news?
         { icon: Briefcase, label: "Portfolio", id: 'portfolio', active: activeView === 'portfolio' },
+        { icon: FileText, label: "Diario", id: 'journal', active: activeView === 'journal' },
         { icon: Settings, label: "Config", id: 'config', active: false },
     ];
 
@@ -26,7 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                 {navItems.map((item, index) => (
                     <button
                         key={index}
-                        onClick={() => item.id && (item.id === 'news' || item.id === 'portfolio') ? onViewChange(item.id as 'news' | 'portfolio') : null}
+                        onClick={() => item.id && (item.id === 'news' || item.id === 'portfolio' || item.id === 'journal') ? onViewChange(item.id as 'news' | 'portfolio' | 'journal') : null}
                         className={`w-full flex items-center justify-center py-3 border-l-2 transition-all duration-300 group ${item.active
                             ? 'border-accent text-accent bg-accent/10'
                             : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
