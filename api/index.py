@@ -275,6 +275,8 @@ async def get_news():
 class PaperTrade(BaseModel):
     ticker: str
     entry_price: float
+    invested_amount: Optional[float] = None
+    quantity: Optional[float] = None
     news_id: Optional[str] = None
     initial_score: Optional[float] = None
     status: str = "OPEN"

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import PortfolioStats from './PortfolioStats';
+import AssetDetailModal from './AssetDetailModal';
 import { Loader2, TrendingUp, TrendingDown, XCircle, AlertTriangle } from 'lucide-react';
 
 interface Trade {
@@ -7,6 +8,8 @@ interface Trade {
     created_at: string;
     ticker: string;
     entry_price: number;
+    invested_amount?: number;
+    quantity?: number;
     initial_score: number;
     status: string;
     latest_sentiment_score?: number;
@@ -24,15 +27,14 @@ const TICKER_MAP: Record<string, string> = {
     'MATIC': 'matic-network',
     'LINK': 'chainlink',
     'UNI': 'uniswap',
-    // Stocks are not supported by CoinGecko simple price, only crypto. 
-    // For stocks we will rely on simulation or user entry + deviation.
-    // Future improvement: AlphaVantage or Yahoo Finance for stocks.
 };
 
 const PaperTradingPanel: React.FC = () => {
     const [trades, setTrades] = useState<Trade[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
+    const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
+    const [isChartOpen, setIsChartOpen] = useState(false);
 
     const fetchTrades = async () => {
         setLoading(true);
@@ -49,7 +51,8 @@ const PaperTradingPanel: React.FC = () => {
         }
     };
 
-    const handleCloseTrade = async (id: number) => {
+    const handleCloseTrade = async (e: React.MouseEvent, id: number) => {
+        e.stopPropagation();
         if (!confirm("¿Cerrar esta operación?")) return;
         try {
             const response = await fetch(`/api/trades/${id}/close`, { method: 'PUT' });
@@ -61,6 +64,11 @@ const PaperTradingPanel: React.FC = () => {
         } catch (e) {
             console.error(e);
         }
+    };
+
+    const handleRowClick = (ticker: string) => {
+        setSelectedAsset(ticker);
+        setIsChartOpen(true);
     };
 
     useEffect(() => {
@@ -87,12 +95,11 @@ const PaperTradingPanel: React.FC = () => {
         });
 
         const updatePrices = async () => {
-            // 1. Identify tickers to fetch
             const tickersToFetch = new Set<string>();
             const tickersToSimulate = new Set<string>();
 
             trades.forEach(t => {
-                const geckoId = TICKER_MAP[t.ticker.toUpperCase()]; // Try to map to ID
+                const geckoId = TICKER_MAP[t.ticker.toUpperCase()];
                 if (geckoId) {
                     tickersToFetch.add(geckoId);
                 } else {
@@ -100,16 +107,13 @@ const PaperTradingPanel: React.FC = () => {
                 }
             });
 
-            // 2. Fetch from CoinGecko
             let fetchedPrices: Record<string, number> = {};
             if (tickersToFetch.size > 0) {
                 try {
                     const ids = Array.from(tickersToFetch).join(',');
                     const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
                     if (response.ok) {
-                        const data = await response.json(); // { "bitcoin": { "usd": 50000 } }
-
-                        // Map back to Ticker
+                        const data = await response.json();
                         Object.entries(TICKER_MAP).forEach(([ticker, id]) => {
                             if (data[id] && data[id].usd) {
                                 fetchedPrices[ticker] = data[id].usd;
@@ -118,59 +122,32 @@ const PaperTradingPanel: React.FC = () => {
                     }
                 } catch (e) {
                     console.error("CoinGecko API Error:", e);
-                    // Fallback: all go to simulate
                     trades.forEach(t => {
                         if (TICKER_MAP[t.ticker.toUpperCase()]) tickersToSimulate.add(t.ticker);
                     });
                 }
             }
 
-            // 3. Update State mixing Real and Simulated
             setCurrentPrices(prev => {
                 const next = { ...prev };
-
-                // Apply fetched
                 Object.entries(fetchedPrices).forEach(([ticker, price]) => {
                     next[ticker] = price;
                 });
 
-                // Apply simulation for others (or fallback)
                 trades.forEach(t => {
-                    // If not in fetchedPrices, simulate
                     if (!fetchedPrices[t.ticker]) {
                         const current = next[t.ticker] || t.entry_price;
-                        const volatility = 0.005; // 0.5% volatility for fallback
+                        const volatility = 0.005;
                         const change = 1 + (Math.random() * (volatility * 2) - volatility);
                         next[t.ticker] = current * change;
                     }
                 });
-
                 return next;
             });
         };
 
-        // Initial fetch
         updatePrices();
-
-        // Loop: CoinGecko allows ~10-30 calls/min free. Safe: 60s.
-        // But user wants live feel. 
-        // Strategy: 
-        // - Fetch Real Prices every 60s.
-        // - Simulate oscillation every 3s based on last real price to keep "alive".
-
-        // Actually, let's keep it simple as requested: Call API every 60s. 
-        // If we want "live" feel between calls, we can interpolate, but that's complex.
-        // User asked "Fetch API every 30-60s... use these prices".
-        // To keep "live" feel (blinking prices), maybe we add tiny noise to real price locally 
-        // between fetches? Or just refresh the simulation loop every 5s, but only fetch API every 60s.
-
-        // Implementation: 
-        // Main Loop 5s: 
-        //   - If (now - lastFetch > 60s) -> Fetch API. 
-        //   - Else -> Simulate/Jitter existing prices lightly.
-
-        const loopInterval = setInterval(updatePrices, 30000); // 30s as requested compromise
-
+        const loopInterval = setInterval(updatePrices, 30000);
         return () => clearInterval(loopInterval);
     }, [trades]);
 
@@ -181,17 +158,19 @@ const PaperTradingPanel: React.FC = () => {
 
         trades.forEach(t => {
             if (t.status === 'OPEN') {
-                invested += t.entry_price;
-                current += currentPrices[t.ticker] || t.entry_price;
+                const qty = t.quantity || (t.invested_amount && t.entry_price ? t.invested_amount / t.entry_price : 1); // Fallback for legacy trades
+                const investedAmt = t.invested_amount || t.entry_price; // Legacy: price = amount (1 unit)
+                const currentPrice = currentPrices[t.ticker] || t.entry_price;
+
+                invested += investedAmt;
+                current += (currentPrice * qty);
             }
         });
 
         return { invested, current };
     }, [trades, currentPrices]);
 
-    const getSignal = (trade: Trade, currentPrice: number) => {
-        const pnlPercent = ((currentPrice - trade.entry_price) / trade.entry_price) * 100;
-
+    const getSignal = (trade: Trade, currentPrice: number, pnlPercent: number) => {
         if (pnlPercent > 5) {
             return (
                 <span className="flex items-center gap-1 text-green-400 font-bold bg-green-400/10 px-2 py-1 rounded animate-pulse">
@@ -206,7 +185,6 @@ const PaperTradingPanel: React.FC = () => {
             );
         }
 
-        // Fallback to AI Sentiment for "Hold" or if neutral
         if (trade.latest_sentiment_score !== undefined) {
             if (trade.latest_sentiment_score <= -0.4) {
                 return <span className="text-red-400 flex items-center gap-1"><TrendingDown size={14} /> BEARISH AI</span>;
@@ -243,10 +221,10 @@ const PaperTradingPanel: React.FC = () => {
                                 <tr className="text-gray-400 border-b border-white/10 text-xs uppercase tracking-wider">
                                     <th className="py-4 px-4">Fecha</th>
                                     <th className="py-4 px-4">Ticker</th>
-                                    <th className="py-4 px-4 text-right">Entrada</th>
+                                    <th className="py-4 px-4 text-right">Precio Entrada</th>
+                                    <th className="py-4 px-4 text-right">Inversión</th>
                                     <th className="py-4 px-4 text-right">Precio Actual</th>
-                                    <th className="py-4 px-4 text-right">Retorno</th>
-                                    <th className="py-4 px-4 text-center">IA Score</th>
+                                    <th className="py-4 px-4 text-right">P&L</th>
                                     <th className="py-4 px-4 text-center">Señal</th>
                                     <th className="py-4 px-4 text-right">Acción</th>
                                 </tr>
@@ -254,11 +232,22 @@ const PaperTradingPanel: React.FC = () => {
                             <tbody>
                                 {trades.map((trade) => {
                                     const currentPrice = currentPrices[trade.ticker] || trade.entry_price;
-                                    const pnl = currentPrice - trade.entry_price;
-                                    const pnlPercent = (pnl / trade.entry_price) * 100;
+
+                                    // Logic for legacy trades support
+                                    const investedAmt = trade.invested_amount || trade.entry_price;
+                                    const qty = trade.quantity || (trade.entry_price > 0 ? investedAmt / trade.entry_price : 0);
+
+                                    const currentValue = currentPrice * qty;
+                                    const pnl = currentValue - investedAmt;
+                                    const pnlPercent = investedAmt > 0 ? (pnl / investedAmt) * 100 : 0;
 
                                     return (
-                                        <tr key={trade.id} className="text-gray-200 border-b border-white/5 hover:bg-white/5 transition-colors group">
+                                        <tr
+                                            key={trade.id}
+                                            onClick={() => handleRowClick(trade.ticker)}
+                                            className="text-gray-200 border-b border-white/5 hover:bg-white/10 transition-colors group cursor-pointer"
+                                            title="Click para ver gráfico"
+                                        >
                                             <td className="py-4 px-4 text-sm text-gray-400">
                                                 {new Date(trade.created_at).toLocaleDateString()}
                                             </td>
@@ -268,27 +257,32 @@ const PaperTradingPanel: React.FC = () => {
                                             <td className="py-4 px-4 font-mono text-gray-400 text-right">
                                                 ${trade.entry_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </td>
+                                            <td className="py-4 px-4 font-mono text-gray-300 text-right">
+                                                ${investedAmt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                            </td>
                                             <td className="py-4 px-4 font-mono text-right font-bold">
                                                 <span className="animate-pulse-slow">
                                                     ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-4 font-mono text-right">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold ${pnl >= 0 ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>
-                                                    {pnl >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-4 text-center text-sm text-gray-400">
-                                                {trade.initial_score?.toFixed(2)}
+                                                <div className="flex flex-col items-end">
+                                                    <span className={`font-bold ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                        {pnl >= 0 ? '+' : ''}${pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                    <span className={`text-xs ${pnl >= 0 ? 'text-green-500/70' : 'text-red-500/70'}`}>
+                                                        {pnl >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
+                                                    </span>
+                                                </div>
                                             </td>
                                             <td className="py-4 px-4 text-center">
                                                 <div className="inline-block min-w-[120px] text-center text-xs font-bold">
-                                                    {getSignal(trade, currentPrice)}
+                                                    {getSignal(trade, currentPrice, pnlPercent)}
                                                 </div>
                                             </td>
                                             <td className="py-4 px-4 text-right">
                                                 <button
-                                                    onClick={() => handleCloseTrade(trade.id)}
+                                                    onClick={(e) => handleCloseTrade(e, trade.id)}
                                                     className="text-gray-400 hover:text-red-400 transition-colors p-2 hover:bg-red-500/10 rounded-lg group-hover:opacity-100 opacity-50"
                                                     title="Cerrar Operación"
                                                 >
@@ -303,6 +297,12 @@ const PaperTradingPanel: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            <AssetDetailModal
+                ticker={selectedAsset || ''}
+                isOpen={isChartOpen}
+                onClose={() => setIsChartOpen(false)}
+            />
         </div>
     );
 };

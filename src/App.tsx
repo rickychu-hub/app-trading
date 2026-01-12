@@ -15,10 +15,12 @@ function App() {
     setIsModalOpen(true);
   };
 
-  const handleConfirmTrade = async (ticker: string, priceStr: string) => {
-    const price = priceStr ? parseFloat(priceStr) : 0; // Backend/Logic should handle 0 or missing price if market order. User said optional. Passing 0 for now or handle in API? API expects float.
+  const handleConfirmTrade = async (ticker: string, priceStr: string, amountStr: string) => {
+    const price = priceStr ? parseFloat(priceStr) : 0;
+    const amount = amountStr ? parseFloat(amountStr) : 0;
 
-    // Validate if necessary. Assuming prompt logic allowed empty.
+    // Calculate quantity
+    const quantity = (price > 0 && amount > 0) ? amount / price : 0;
 
     if (!selectedNews) return;
 
@@ -29,6 +31,8 @@ function App() {
         body: JSON.stringify({
           ticker: ticker,
           entry_price: price,
+          invested_amount: amount,
+          quantity: quantity,
           news_id: String(selectedNews.id),
           initial_score: selectedNews.sentiment_score || 0,
           status: "OPEN"
@@ -40,10 +44,6 @@ function App() {
         setIsModalOpen(false);
         setSelectedNews(null);
         setActiveView('portfolio');
-        // Trigger refresh in PaperTradingPanel if needed. 
-        // Since we switch view, PaperTradingPanel might mount and fetch.
-        // But if it was already mounted (e.g. if we used display:none), we might need an event.
-        // React conditional rendering unmounts/remounts usually, so it should fetch fresh data.
       } else {
         alert("Error al guardar el trade.");
       }
