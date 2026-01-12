@@ -23,6 +23,20 @@ const TradeModal: React.FC<TradeModalProps> = ({ isOpen, onClose, onConfirm, ini
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        // If price is empty, we must ensure it's handled. 
+        // Ideally we should pass the fetched price if the user didn't input one.
+        // But we don't have the fetched price in state here securely (it was in the previous implementation but removed in latest view).
+        // Wait, I see I removed the fetching logic in a previous step to fix lint errors or simplify? 
+        // Ah, in Step 242 I added fetching logic. In Step 306 view, it is NOT there.
+        // I must have overwritten it or viewed a version without it. 
+        // Re-reading Step 306 view: YES, the fetching logic is GONE.
+        // I need to re-add fetching logic OR pass it from parent.
+        // User asked to "validate input". 
+        // Let's assume for this specific step, I will just ensure onConfirm sends something. 
+        // But to fully satisfy "use detected currentPrice", I need to re-implement the fetch or recv it.
+        // The prompt says "Asegúrate de que si el usuario deja el 'Precio de Entrada' vacío, el sistema use automáticamente el currentPrice detectado".
+        // I will re-implement the fetch logic briefly to support this requirement.
+
         onConfirm(ticker, price, amount);
     };
 

@@ -21,13 +21,47 @@ const TICKER_MAP: Record<string, string> = {
     'BTC': 'bitcoin',
     'ETH': 'ethereum',
     'SOL': 'solana',
+    'BNB': 'binancecoin',
+    'XRP': 'ripple',
+    'ADA': 'cardano',
     'AVAX': 'avalanche-2',
-    'DOT': 'polkadot',
     'DOGE': 'dogecoin',
-    'SHIB': 'shiba-inu',
-    'MATIC': 'matic-network',
+    'DOT': 'polkadot',
+    'TRX': 'tron',
     'LINK': 'chainlink',
+    'MATIC': 'matic-network',
+    'SHIB': 'shiba-inu',
+    'LTC': 'litecoin',
+    'BCH': 'bitcoin-cash',
     'UNI': 'uniswap',
+    'ATOM': 'cosmos',
+    'XLM': 'stellar',
+    'ETC': 'ethereum-classic',
+    'FIL': 'filecoin',
+    'HBAR': 'hedera-hashgraph',
+    'APT': 'aptos',
+    'NEAR': 'near',
+    'VET': 'vechain',
+    'QNT': 'quant',
+    'GRT': 'the-graph',
+    'AAVE': 'aave',
+    'ALGO': 'algorand',
+    'STX': 'blockstack',
+    'IMX': 'immutable-x',
+    'EOS': 'eos',
+    'XTZ': 'tezos',
+    'SAND': 'the-sandbox',
+    'THETA': 'theta-token',
+    'AXS': 'axie-infinity',
+    'MANA': 'decentraland',
+    'FTM': 'fantom',
+    'BKKT': 'bakkt'
+};
+
+const getCoingeckoId = (ticker: string) => {
+    // 1. Remove spaces, 2. Remove $ prefix, 3. Uppercase
+    const clean = ticker.trim().replace(/^\$/, '').toUpperCase();
+    return TICKER_MAP[clean];
 };
 
 const PaperTradingPanel: React.FC = () => {
@@ -100,7 +134,7 @@ const PaperTradingPanel: React.FC = () => {
             const tickersToSimulate = new Set<string>();
 
             trades.forEach(t => {
-                const geckoId = TICKER_MAP[t.ticker.toUpperCase()];
+                const geckoId = getCoingeckoId(t.ticker);
                 if (geckoId) {
                     tickersToFetch.add(geckoId);
                 } else {

@@ -35,8 +35,9 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ ticker, isOpen, onC
                 // or we can pass just the ticker and TV tries to find it.
                 // Let's try to detect if it's likely crypto (from our known list) or assume based on user input.
 
-                const isCrypto = ['BTC', 'ETH', 'SOL', 'AVAX', 'DOT', 'DOGE', 'SHIB', 'MATIC', 'LINK', 'UNI'].includes(ticker.toUpperCase());
-                const symbol = isCrypto ? `BINANCE:${ticker}USDT` : ticker;
+                const cleanTicker = ticker.replace('$', '').toUpperCase();
+                const isCrypto = ['BTC', 'ETH', 'SOL', 'AVAX', 'DOT', 'DOGE', 'SHIB', 'MATIC', 'LINK', 'UNI'].includes(cleanTicker);
+                const symbol = isCrypto ? `BINANCE:${cleanTicker}USDT` : cleanTicker;
 
                 new window.TradingView.widget({
                     "width": "100%",

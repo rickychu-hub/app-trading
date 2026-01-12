@@ -275,8 +275,8 @@ async def get_news():
 class PaperTrade(BaseModel):
     ticker: str
     entry_price: float
-    invested_amount: Optional[float] = None
-    quantity: Optional[float] = None
+    invested_amount: float
+    quantity: float
     news_id: Optional[str] = None
     initial_score: Optional[float] = None
     status: str = "OPEN"
@@ -366,6 +366,7 @@ async def fetch_trades() -> List[dict]:
 
 @app.post("/trades")
 async def create_trade(trade: PaperTrade):
+    print(f"💰 Creating trade for {trade.ticker}: Invested=${trade.invested_amount}, Qty={trade.quantity}")
     data = trade.dict()
     if await save_trade(data):
         return {"status": "success"}
