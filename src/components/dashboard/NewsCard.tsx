@@ -4,9 +4,10 @@ import type { NewsItem } from '../../data/mockData';
 
 interface NewsCardProps {
     item: NewsItem;
+    onSimulateTrade: (item: NewsItem) => void;
 }
 
-const NewsCard: React.FC<NewsCardProps> = ({ item }) => {
+const NewsCard: React.FC<NewsCardProps> = ({ item, onSimulateTrade }) => {
     const getSentimentStyles = (sentimiento: string) => {
         switch (sentimiento) {
             case 'Positivo':
@@ -44,45 +45,9 @@ const NewsCard: React.FC<NewsCardProps> = ({ item }) => {
 
     const styles = getSentimentStyles(item.sentimiento);
 
-    const handleSimulateTrade = async (e: React.MouseEvent) => {
+    const handleSimulateTrade = (e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent card click
-
-        const defaultTicker = item.empresas && item.empresas.length > 0 ? item.empresas[0] : "";
-        const ticker = window.prompt("Ticker del activo:", defaultTicker);
-        if (!ticker) return;
-
-        const priceStr = window.prompt(`Precio de entrada para ${ticker}:`);
-        if (!priceStr) return;
-
-        const price = parseFloat(priceStr);
-        if (isNaN(price)) {
-            alert("Precio inválido");
-            return;
-        }
-
-        try {
-            const response = await fetch("/api/trades", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ticker: ticker,
-                    entry_price: price,
-                    news_id: item.id,
-                    initial_score: item.sentiment_score || 0,
-                    status: "OPEN"
-                })
-            });
-
-            if (response.ok) {
-                alert("Trade simulado guardado correctamente.");
-                window.dispatchEvent(new Event('tradeResponse'));
-            } else {
-                alert("Error al guardar el trade.");
-            }
-        } catch (error) {
-            console.error(error);
-            alert("Error de conexión");
-        }
+        onSimulateTrade(item);
     };
 
     return (
@@ -101,7 +66,7 @@ const NewsCard: React.FC<NewsCardProps> = ({ item }) => {
                 </div>
                 {item.sentiment_score !== undefined && (
                     <div className={`flex items-center gap-1 text-xs font-mono px-2 py-1 rounded bg-black/50 ${item.sentiment_score > 0.2 ? 'text-green-400' :
-                            item.sentiment_score < -0.2 ? 'text-red-400' : 'text-gray-400'
+                        item.sentiment_score < -0.2 ? 'text-red-400' : 'text-gray-400'
                         }`}>
                         SCORE: {item.sentiment_score.toFixed(2)}
                     </div>

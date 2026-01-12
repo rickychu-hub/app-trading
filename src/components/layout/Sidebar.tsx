@@ -1,12 +1,17 @@
 import React from 'react';
 import { LayoutDashboard, Newspaper, Briefcase, Settings } from 'lucide-react';
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+    activeView: 'news' | 'portfolio';
+    onViewChange: (view: 'news' | 'portfolio') => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
     const navItems = [
-        { icon: LayoutDashboard, label: "Dashboard", active: true },
-        { icon: Newspaper, label: "Noticias", active: false },
-        { icon: Briefcase, label: "Portfolio", active: false },
-        { icon: Settings, label: "Config", active: false },
+        { icon: LayoutDashboard, label: "Dashboard", id: 'news', active: activeView === 'news' },
+        { icon: Newspaper, label: "Noticias", id: 'news', active: false }, // Keeping consistent or disable? User said 'Grid/Dashboard' -> news. 'Noticias' -> maybe also news?
+        { icon: Briefcase, label: "Portfolio", id: 'portfolio', active: activeView === 'portfolio' },
+        { icon: Settings, label: "Config", id: 'config', active: false },
     ];
 
     return (
@@ -21,9 +26,10 @@ const Sidebar: React.FC = () => {
                 {navItems.map((item, index) => (
                     <button
                         key={index}
+                        onClick={() => item.id && (item.id === 'news' || item.id === 'portfolio') ? onViewChange(item.id as 'news' | 'portfolio') : null}
                         className={`w-full flex items-center justify-center py-3 border-l-2 transition-all duration-300 group ${item.active
-                                ? 'border-accent text-accent bg-accent/10'
-                                : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
+                            ? 'border-accent text-accent bg-accent/10'
+                            : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
                             }`}
                     >
                         <item.icon size={24} className={`transition-transform duration-300 ${item.active ? 'scale-110' : 'group-hover:scale-110'}`} />

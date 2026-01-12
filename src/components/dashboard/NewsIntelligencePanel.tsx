@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import NewsCard from './NewsCard';
-import PaperTradingPanel from './PaperTradingPanel';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { type NewsItem, mockNews } from '../../data/mockData';
 
-const NewsIntelligencePanel: React.FC = () => {
+interface NewsIntelligencePanelProps {
+    onSimulateTrade: (item: NewsItem) => void;
+}
+
+const NewsIntelligencePanel: React.FC<NewsIntelligencePanelProps> = ({ onSimulateTrade }) => {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -62,13 +65,11 @@ const NewsIntelligencePanel: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {news.map((item, index) => (
-                            <NewsCard key={item.id || index} item={item} />
+                            <NewsCard key={item.id || index} item={item} onSimulateTrade={onSimulateTrade} />
                         ))}
                     </div>
                 )}
             </div>
-
-            <PaperTradingPanel />
         </div>
     );
 };

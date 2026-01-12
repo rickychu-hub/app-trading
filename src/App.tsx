@@ -1,17 +1,83 @@
+import React, { useState } from 'react';
 import Layout from './components/layout/Layout';
 import NewsIntelligencePanel from './components/dashboard/NewsIntelligencePanel';
+import PaperTradingPanel from './components/dashboard/PaperTradingPanel';
+import TradeModal from './components/dashboard/TradeModal';
+import type { NewsItem } from './data/mockData';
 
 function App() {
+  const [activeView, setActiveView] = useState<'news' | 'portfolio'>('news');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+
+  const handleSimulateTrade = (item: NewsItem) => {
+    setSelectedNews(item);
+    setIsModalOpen(true);
+  };
+
+  const handleConfirmTrade = async (ticker: string, priceStr: string) => {
+    const price = priceStr ? parseFloat(priceStr) : 0; // Backend/Logic should handle 0 or missing price if market order. User said optional. Passing 0 for now or handle in API? API expects float.
+
+    // Validate if necessary. Assuming prompt logic allowed empty.
+
+    if (!selectedNews) return;
+
+    try {
+      const response = await fetch("/api/trades", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: ticker,
+          entry_price: price,
+          news_id: String(selectedNews.id),
+          initial_score: selectedNews.sentiment_score || 0,
+          status: "OPEN"
+        })
+      });
+
+      if (response.ok) {
+        alert("Trade simulado guardado correctamente.");
+        setIsModalOpen(false);
+        setSelectedNews(null);
+        setActiveView('portfolio');
+        // Trigger refresh in PaperTradingPanel if needed. 
+        // Since we switch view, PaperTradingPanel might mount and fetch.
+        // But if it was already mounted (e.g. if we used display:none), we might need an event.
+        // React conditional rendering unmounts/remounts usually, so it should fetch fresh data.
+      } else {
+        alert("Error al guardar el trade.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error de conexión");
+    }
+  };
+
   return (
-    <Layout>
+    <Layout activeView={activeView} onViewChange={setActiveView}>
       <div className="mb-8">
         <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-          Dashboard General
+          {activeView === 'news' ? 'Dashboard General' : 'Portfolio Simulado'}
         </h2>
-        <p className="text-gray-400">Bienvenido a su centro de inteligencia financiera.</p>
+        <p className="text-gray-400">
+          {activeView === 'news'
+            ? 'Bienvenido a su centro de inteligencia financiera.'
+            : 'Gestión y seguimiento de operaciones simuladas.'}
+        </p>
       </div>
 
-      <NewsIntelligencePanel />
+      {activeView === 'news' ? (
+        <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
+      ) : (
+        <PaperTradingPanel />
+      )}
+
+      <TradeModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleConfirmTrade}
+        initialTicker={selectedNews && selectedNews.empresas && selectedNews.empresas.length > 0 ? selectedNews.empresas[0] : ""}
+      />
     </Layout>
   );
 }
