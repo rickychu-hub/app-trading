@@ -11,10 +11,12 @@ interface TradeModalProps {
 const TradeModal: React.FC<TradeModalProps> = ({ isOpen, onClose, onConfirm, initialTicker }) => {
     const [ticker, setTicker] = useState(initialTicker);
     const [price, setPrice] = useState('');
+    const [amount, setAmount] = useState('');
 
     useEffect(() => {
         setTicker(initialTicker);
         setPrice('');
+        setAmount('');
     }, [initialTicker, isOpen]);
 
     if (!isOpen) return null;
@@ -62,6 +64,21 @@ const TradeModal: React.FC<TradeModalProps> = ({ isOpen, onClose, onConfirm, ini
                             onChange={(e) => setPrice(e.target.value)}
                             className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent transition-colors"
                             placeholder="Precio actual de mercado"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Capital a Invertir ($)
+                        </label>
+                        <input
+                            type="number"
+                            step="any"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent transition-colors"
+                            placeholder="Ej: 1000"
+                            required
                         />
                     </div>
 
