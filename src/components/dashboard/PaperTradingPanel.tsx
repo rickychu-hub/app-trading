@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, TrendingUp, TrendingDown, AlertTriangle, XCircle } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, XCircle } from 'lucide-react';
 
 interface Trade {
     id: number;
@@ -58,7 +58,7 @@ const PaperTradingPanel: React.FC = () => {
         if (score <= -0.4) {
             return (
                 <span className="flex items-center gap-1 text-red-500 font-bold animate-pulse">
-                    <AlertTriangle size={14} /> VENDER
+                    <TrendingDown size={14} /> VENDER
                 </span>
             );
         } else if (score >= 0.4) {

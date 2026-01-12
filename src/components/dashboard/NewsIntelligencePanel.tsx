@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import NewsCard from './NewsCard';
 import PaperTradingPanel from './PaperTradingPanel';
 import { Loader2, RefreshCw } from 'lucide-react';
-import { NewsItem, mockNews } from '../../data/mockData';
+import { type NewsItem, mockNews } from '../../data/mockData';
 
 const NewsIntelligencePanel: React.FC = () => {
     const [news, setNews] = useState<NewsItem[]>([]);
