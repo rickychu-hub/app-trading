@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { getCoingeckoId } from '../../utils/crypto';
+import { X, Circle } from 'lucide-react';
+import { usePriceStore } from '../../store/priceStore';
 
 interface TradeModalProps {
     isOpen: boolean;
@@ -11,42 +11,45 @@ interface TradeModalProps {
 
 const TradeModal: React.FC<TradeModalProps> = ({ isOpen, onClose, onConfirm, initialTicker }) => {
     const [ticker, setTicker] = useState(initialTicker);
-    const [price, setPrice] = useState('');
     const [amount, setAmount] = useState('');
-    const [isLoadingPrice, setIsLoadingPrice] = useState(false);
 
-    const fetchPrice = async (tickerSymbol: string) => {
-        if (!tickerSymbol) return;
-        setIsLoadingPrice(true);
-        const id = getCoingeckoId(tickerSymbol);
-        try {
-            const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
-            const data = await res.json();
-            if (data[id]?.usd) {
-                setPrice(data[id].usd.toString());
-            }
-        } catch (e) {
-            console.error("Error fetching price", e);
-        } finally {
-            setIsLoadingPrice(false);
-        }
-    };
+    // Store integration
+    const { getPrice, subscribeToSymbol, unsubscribeFromSymbol, connectionStatus } = usePriceStore();
+
+    // Get real-time price (returns undefined if not yet connected/received)
+    const rawPrice = getPrice(ticker);
+    const price = rawPrice ? rawPrice.toString() : '';
 
     useEffect(() => {
         setTicker(initialTicker);
-        setPrice('');
         setAmount('');
-        if (initialTicker) {
-            fetchPrice(initialTicker);
+
+        if (initialTicker && isOpen) {
+            subscribeToSymbol(initialTicker);
         }
+
+        // Cleanup: unsubscribe when modal closes or ticker changes (optional, but good practice)
+        return () => {
+            if (initialTicker) {
+                // We keep subscription active for now as moving between modals is common
+                // unsubscribeFromSymbol(initialTicker); 
+            }
+        };
     }, [initialTicker, isOpen]);
+
+    // Handle ticker change manually
+    useEffect(() => {
+        if (ticker) {
+            subscribeToSymbol(ticker);
+        }
+    }, [ticker]);
+
+    if (!isOpen) return null;
 
     if (!isOpen) return null;
 
     const handleTickerBlur = () => {
-        if (ticker) {
-            fetchPrice(ticker);
-        }
+        // No manual fetch needed, useEffect handles subscription
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -85,17 +88,23 @@ const TradeModal: React.FC<TradeModalProps> = ({ isOpen, onClose, onConfirm, ini
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-2">
-                            Precio de Entrada ($) {isLoadingPrice && <span className="text-xs text-accent animate-pulse ml-2">Buscando precio...</span>}
+                        <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                            Precio de Entrada ($)
+                            {connectionStatus === 'connected' ? (
+                                <span className="flex items-center text-xs text-green-400 gap-1 bg-green-400/10 px-2 py-0.5 rounded-full">
+                                    <Circle size={8} fill="currentColor" className="animate-pulse" /> Live
+                                </span>
+                            ) : (
+                                <span className="text-xs text-yellow-500">Conectando...</span>
+                            )}
                         </label>
                         <input
                             type="number"
                             step="any"
                             value={price}
-                            onChange={(e) => setPrice(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent transition-colors"
-                            placeholder="0.00"
-                            required
+                            readOnly
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent transition-colors cursor-not-allowed opacity-80"
+                            placeholder="Esperando datos..."
                         />
                     </div>
 

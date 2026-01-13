@@ -5,6 +5,7 @@ import PaperTradingPanel from './components/dashboard/PaperTradingPanel';
 import TradeModal from './components/dashboard/TradeModal';
 import TradingJournalPanel from './components/dashboard/TradingJournalPanel';
 import type { NewsItem } from './data/mockData';
+import { formatQuantity } from './utils/tradeUtils';
 
 function App() {
   const [activeView, setActiveView] = useState<'news' | 'portfolio' | 'journal'>('news');
@@ -21,7 +22,8 @@ function App() {
     const amount = amountStr ? parseFloat(amountStr) : 0;
 
     // Calculate quantity
-    const quantity = (price > 0 && amount > 0) ? amount / price : 0;
+    const rawQuantity = (price > 0 && amount > 0) ? amount / price : 0;
+    const quantity = parseFloat(formatQuantity(rawQuantity));
 
     if (!selectedNews) return;
 
