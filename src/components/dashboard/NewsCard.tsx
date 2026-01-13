@@ -71,9 +71,16 @@ const NewsCard: React.FC<NewsCardProps> = ({ item, onSimulateTrade }) => {
                         SCORE: {item.sentiment_score.toFixed(2)}
                     </div>
                 )}
+                )}
             </div>
 
-            <p className="text-lg font-medium text-gray-100 mb-6 leading-relaxed flex-grow">
+            <a href={item.enlace} target="_blank" rel="noopener noreferrer" className="block mb-2 group-hover:text-accent transition-colors">
+                <h3 className="text-lg font-bold text-white leading-tight">
+                    {item.titulo}
+                </h3>
+            </a>
+
+            <p className="text-sm text-gray-400 mb-6 leading-relaxed flex-grow">
                 {item.resumen}
             </p>
 
