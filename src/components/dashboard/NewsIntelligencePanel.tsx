@@ -10,6 +10,7 @@ interface NewsIntelligencePanelProps {
 const NewsIntelligencePanel: React.FC<NewsIntelligencePanelProps> = ({ onSimulateTrade }) => {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     const fetchNews = async () => {
         setLoading(true);
@@ -18,6 +19,7 @@ const NewsIntelligencePanel: React.FC<NewsIntelligencePanelProps> = ({ onSimulat
             if (response.ok) {
                 const data = await response.json();
                 setNews(data);
+                setLastUpdated(new Date());
             } else {
                 console.error("Failed to fetch news");
                 // Fallback to mock data if API fails
@@ -47,7 +49,10 @@ const NewsIntelligencePanel: React.FC<NewsIntelligencePanelProps> = ({ onSimulat
                         <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                             News Intelligence <span className="text-accent text-sm bg-accent/10 px-2 py-1 rounded border border-accent/20">LIVE Gemini 2.0</span>
                         </h2>
-                        <p className="text-gray-400 mt-1">Análisis de sentimiento en tiempo real del mercado global.</p>
+                        <p className="text-gray-400 mt-1">
+                            Análisis de sentimiento en tiempo real del mercado global.
+                            {lastUpdated && <span className="text-xs text-gray-500 ml-2">Actualizado: {lastUpdated.toLocaleTimeString()}</span>}
+                        </p>
                     </div>
                     <button
                         onClick={fetchNews}

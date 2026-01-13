@@ -161,7 +161,7 @@ async def fetch_from_supabase() -> List[dict]:
                 else:
                     unique_news.append(item)
                     
-                if len(unique_news) >= 20:
+                if len(unique_news) >= 4:
                     break
             
             return unique_news
