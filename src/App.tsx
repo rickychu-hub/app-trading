@@ -94,7 +94,40 @@ function App() {
 
       {activeView === 'news' ? (
         <div className="space-y-6">
-          <StrategyMonitor />
+          <StrategyMonitor onExecuteTrade={async (side, price, reason) => {
+            // Auto-Trade Implementation
+            const ticker = 'BTCUSDT';
+            const investAmount = 1000; // Fixed demo amount
+            const quantity = parseFloat(formatQuantity(investAmount / price));
+
+            try {
+              const { error } = await supabase.from('trades').insert([{
+                ticker,
+                entry_price: price,
+                invested_amount: investAmount,
+                quantity,
+                news_id: 'AUTO_' + Date.now(), // Synthetic ID
+                initial_score: 0,
+                status: 'OPEN',
+                // We might want to store 'side' or 'strategy' in metadata if DB supported it, 
+                // but for now we fit the existing schema.
+              }]);
+
+              if (!error) {
+                notificationService.sendAlert({
+                  event: "TRADE_OPEN",
+                  ticker,
+                  price,
+                  size: investAmount,
+                  message: `BOT: ${side} Executed @ $${price} (${reason})`
+                });
+                // Optional: Flash UI or simple log
+                console.log("Auto-trade executed successfully");
+              }
+            } catch (err) {
+              console.error("Auto-trade failed", err);
+            }
+          }} />
           <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
         </div>
       ) : activeView === 'portfolio' ? (

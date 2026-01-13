@@ -90,8 +90,24 @@ const AnalyticsPanel: React.FC = () => {
                             <select value={symbol} onChange={e => setSymbol(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-accent">
                                 <option value="BTCUSDT">BTC/USDT</option>
                                 <option value="ETHUSDT">ETH/USDT</option>
+                                <option value="BNBUSDT">BNB/USDT</option>
                                 <option value="SOLUSDT">SOL/USDT</option>
                                 <option value="XRPUSDT">XRP/USDT</option>
+                                <option value="ADAUSDT">ADA/USDT</option>
+                                <option value="DOGEUSDT">DOGE/USDT</option>
+                                <option value="DOTUSDT">DOT/USDT</option>
+                                <option value="TRXUSDT">TRX/USDT</option>
+                                <option value="LINKUSDT">LINK/USDT</option>
+                                <option value="MATICUSDT">MATIC/USDT</option>
+                                <option value="AVAXUSDT">AVAX/USDT</option>
+                                <option value="LTCUSDT">LTC/USDT</option>
+                                <option value="BCHUSDT">BCH/USDT</option>
+                                <option value="ATOMUSDT">ATOM/USDT</option>
+                                <option value="UNIUSDT">UNI/USDT</option>
+                                <option value="XLMUSDT">XLM/USDT</option>
+                                <option value="NEARUSDT">NEAR/USDT</option>
+                                <option value="APTUSDT">APT/USDT</option>
+                                <option value="SHIBUSDT">SHIB/USDT</option>
                             </select>
                         </div>
                         <div>
