@@ -6,11 +6,13 @@ import TradeModal from './components/dashboard/TradeModal';
 import TradingJournalPanel from './components/dashboard/TradingJournalPanel';
 import SettingsPanel from './components/dashboard/SettingsPanel';
 import { supabase } from './lib/supabaseClient';
+import { notificationService } from './services/notificationService';
+import AnalyticsPanel from './components/dashboard/AnalyticsPanel';
 import type { NewsItem } from './data/mockData';
 import { formatQuantity } from './utils/tradeUtils';
 
 function App() {
-  const [activeView, setActiveView] = useState<'news' | 'portfolio' | 'journal' | 'settings'>('news');
+  const [activeView, setActiveView] = useState<'news' | 'portfolio' | 'journal' | 'settings' | 'analytics'>('news');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
@@ -43,6 +45,15 @@ function App() {
       ]);
 
       if (!error) {
+        // Send alert
+        notificationService.sendAlert({
+          event: "TRADE_OPEN",
+          ticker: ticker,
+          price: price,
+          size: amount,
+          message: `Trade abierto: ${ticker} @ $${price}`
+        });
+
         alert("Trade simulado guardado correctamente.");
         setIsModalOpen(false);
         setSelectedNews(null);
@@ -64,7 +75,8 @@ function App() {
           {activeView === 'news' ? 'Dashboard General' :
             activeView === 'portfolio' ? 'Portfolio Simulado' :
               activeView === 'journal' ? 'Diario de Trading Inteligente' :
-                'Configuración'}
+                activeView === 'analytics' ? 'Backtesting & Analytics' :
+                  'Configuración'}
         </h2>
         <p className="text-gray-400">
           {activeView === 'news'
@@ -73,7 +85,9 @@ function App() {
               ? 'Gestión y seguimiento de operaciones simuladas.'
               : activeView === 'journal'
                 ? 'Análisis automatizado de sus operaciones pasadas.'
-                : 'Gestión de parámetros y preferencias.'}
+                : activeView === 'analytics'
+                  ? 'Laboratorio de validación de estrategias históricas.'
+                  : 'Gestión de parámetros y preferencias.'}
         </p>
       </div>
 
@@ -83,6 +97,8 @@ function App() {
         <PaperTradingPanel />
       ) : activeView === 'journal' ? (
         <TradingJournalPanel />
+      ) : activeView === 'analytics' ? (
+        <AnalyticsPanel />
       ) : (
         <SettingsPanel />
       )}

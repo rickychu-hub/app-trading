@@ -1,15 +1,16 @@
 import React from 'react';
-import { LayoutDashboard, Briefcase, Settings, FileText } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Settings, FileText, FlaskConical } from 'lucide-react';
 
 interface SidebarProps {
-    activeView: 'news' | 'portfolio' | 'journal' | 'settings';
-    onViewChange: (view: 'news' | 'portfolio' | 'journal' | 'settings') => void;
+    activeView: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics';
+    onViewChange: (view: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
     const navItems = [
         { icon: LayoutDashboard, label: "Dashboard", id: 'news', active: activeView === 'news' },
         { icon: Briefcase, label: "Portfolio", id: 'portfolio', active: activeView === 'portfolio' },
+        { icon: FlaskConical, label: "Analytics", id: 'analytics', active: activeView === 'analytics' },
         { icon: FileText, label: "Diario", id: 'journal', active: activeView === 'journal' },
         { icon: Settings, label: "Config", id: 'settings', active: activeView === 'settings' },
     ];
@@ -26,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
                 {navItems.map((item, index) => (
                     <button
                         key={index}
-                        onClick={() => item.id && (item.id === 'news' || item.id === 'portfolio' || item.id === 'journal' || item.id === 'settings') ? onViewChange(item.id as 'news' | 'portfolio' | 'journal' | 'settings') : null}
+                        onClick={() => item.id ? onViewChange(item.id as any) : null}
                         className={`w-full flex items-center justify-center py-3 border-l-2 transition-all duration-300 group ${item.active
                             ? 'border-accent text-accent bg-accent/10'
                             : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'

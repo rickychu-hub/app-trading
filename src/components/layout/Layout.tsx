@@ -4,8 +4,8 @@ import Topbar from './Topbar';
 
 interface LayoutProps {
     children: React.ReactNode;
-    activeView: 'news' | 'portfolio' | 'journal' | 'settings';
-    onViewChange: (view: 'news' | 'portfolio' | 'journal' | 'settings') => void;
+    activeView: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics';
+    onViewChange: (view: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange }) => {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { notificationService } from '../../services/notificationService';
 
 const SettingsPanel: React.FC = () => {
     const [initialCapital, setInitialCapital] = useState('10000');
@@ -34,6 +35,14 @@ const SettingsPanel: React.FC = () => {
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleTestAlert = async () => {
+        await notificationService.sendAlert({
+            event: "TEST",
+            message: "Conexión operativa con InvIntel-Hub"
+        });
+        alert("Alerta de prueba enviada (Revisar consola o n8n).");
     };
 
     return (
@@ -85,11 +94,18 @@ const SettingsPanel: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="pt-4">
+                <div className="pt-4 flex gap-4">
+                    <button
+                        type="button"
+                        onClick={handleTestAlert}
+                        className="flex-1 py-3 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5 transition-colors font-medium"
+                    >
+                        🔔 Probar Alerta
+                    </button>
                     <button
                         type="submit"
                         disabled={isSaving}
-                        className={`w-full py-3 rounded-lg text-black font-bold transition-all ${isSaving ? 'bg-gray-500 cursor-not-allowed' : 'bg-accent hover:bg-accent/90'
+                        className={`flex-1 py-3 rounded-lg text-black font-bold transition-all ${isSaving ? 'bg-gray-500 cursor-not-allowed' : 'bg-accent hover:bg-accent/90'
                             }`}
                     >
                         {isSaving ? 'Guardando...' : 'Guardar Configuración'}
