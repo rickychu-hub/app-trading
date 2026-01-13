@@ -1,44 +1,34 @@
 import React, { useState } from 'react';
-import { FlaskConical, TrendingUp, Activity, AlertTriangle, Play } from 'lucide-react';
-import { backtestEngine, type Candle, type BacktestResult } from '../../services/backtestEngine';
+import { FlaskConical, TrendingUp, Activity, AlertTriangle, Play, Calendar, LineChart } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { backtestEngine, type BacktestResult } from '../../services/backtestEngine';
+import { binanceService } from '../../services/binancePriceService';
 
 const AnalyticsPanel: React.FC = () => {
     const [isBacktesting, setIsBacktesting] = useState(false);
     const [result, setResult] = useState<BacktestResult | null>(null);
+    const [symbol, setSymbol] = useState('BTCUSDT');
+    const [timeframe, setTimeframe] = useState('4h');
 
-    // Mock Data Generator
-    const generateMockCandles = (count: number = 100): Candle[] => {
-        const candles: Candle[] = [];
-        let price = 50000;
-        const now = new Date();
-
-        for (let i = 0; i < count; i++) {
-            const time = new Date(now.getTime() - (count - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            const change = (Math.random() - 0.48) * 1000; // Slight upward bias
-            const open = price;
-            const close = price + change;
-            const high = Math.max(open, close) + Math.random() * 200;
-            const low = Math.min(open, close) - Math.random() * 200;
-
-            candles.push({ time, open, high, low, close });
-            price = close;
-        }
-        return candles;
-    };
-
-    const handleRunBacktest = () => {
+    const handleRunBacktest = async () => {
         setIsBacktesting(true);
-        setTimeout(() => {
-            const mockData = generateMockCandles(150);
-            const backtestResult = backtestEngine.runBacktest(mockData, {
+        try {
+            // Fetch Real Data
+            const candles = await binanceService.fetchHistoricalCandles(symbol, timeframe, 500); // 500 candles
+            // Run Backtest
+            const backtestResult = backtestEngine.runBacktest(candles, {
                 initialCapital: 10000,
                 riskPerTrade: 0.02,
                 smaLengthFast: 5,
                 smaLengthSlow: 15
             });
             setResult(backtestResult);
+        } catch (error) {
+            console.error("Backtest failed:", error);
+            alert("Error running backtest. Check console.");
+        } finally {
             setIsBacktesting(false);
-        }, 1000); // Simulate processing delay
+        }
     };
 
     return (
@@ -49,21 +39,53 @@ const AnalyticsPanel: React.FC = () => {
                     Laboratorio de Estrategias
                 </h1>
                 <p className="text-gray-400">
-                    Valide matemáticamente sus ideas antes de arriesgar capital real.
+                    Valide matemáticamente sus ideas con datos reales de Binance.
                 </p>
             </div>
 
             {/* Controls */}
             <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 shadow-xl">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-xl font-bold text-white mb-1">Configuración del Backtest</h3>
-                        <p className="text-sm text-gray-400">Estrategia: SMA Crossover (Fast: 5, Slow: 15) | Asset: BTC Simulated</p>
+                <div className="flex flex-col md:flex-row items-center gap-6 justify-between">
+                    <div className="flex flex-wrap gap-4 items-center">
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1 ml-1">Symbol</label>
+                            <div className="relative">
+                                <LineChart className="absolute left-3 top-3 text-gray-500" size={16} />
+                                <select
+                                    value={symbol}
+                                    onChange={(e) => setSymbol(e.target.value)}
+                                    className="bg-black/40 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white focus:border-accent outline-none appearance-none min-w-[140px]"
+                                >
+                                    <option value="BTCUSDT">BTC/USDT</option>
+                                    <option value="ETHUSDT">ETH/USDT</option>
+                                    <option value="SOLUSDT">SOL/USDT</option>
+                                    <option value="BNBUSDT">BNB/USDT</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1 ml-1">Timeframe</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-3 text-gray-500" size={16} />
+                                <select
+                                    value={timeframe}
+                                    onChange={(e) => setTimeframe(e.target.value)}
+                                    className="bg-black/40 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white focus:border-accent outline-none appearance-none min-w-[140px]"
+                                >
+                                    <option value="15m">15 Minutes</option>
+                                    <option value="1h">1 Hour</option>
+                                    <option value="4h">4 Hours</option>
+                                    <option value="1d">1 Day</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
+
                     <button
                         onClick={handleRunBacktest}
                         disabled={isBacktesting}
-                        className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-black px-6 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full md:w-auto flex items-center justify-center gap-2 bg-accent hover:bg-accent/90 text-black px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(132,204,22,0.3)] hover:shadow-[0_0_30px_rgba(132,204,22,0.5)]"
                     >
                         {isBacktesting ? (
                             <Activity className="animate-spin" />
@@ -118,30 +140,45 @@ const AnalyticsPanel: React.FC = () => {
                 </div>
             )}
 
-            {/* Equity Curve Placeholder */}
+            {/* Equity Curve Chart */}
             {result && (
-                <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5">
+                <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 h-[400px]">
                     <h3 className="text-lg font-bold text-white mb-4">Curva de Equidad</h3>
-                    <div className="h-64 flex items-end gap-1 border-b border-l border-gray-700/50 p-2">
-                        {result.equityCurve.map((point, i) => {
-                            // Simple normalization for visualization
-                            const min = Math.min(...result.equityCurve.map(p => p.value));
-                            const max = Math.max(...result.equityCurve.map(p => p.value));
-                            const height = ((point.value - min) / (max - min)) * 100;
-
-                            return (
-                                <div
-                                    key={i}
-                                    className="flex-1 bg-accent/20 hover:bg-accent/40 transition-colors rounded-t-sm relative group"
-                                    style={{ height: `${Math.max(height, 1)}%` }}
-                                >
-                                    <div className="absolute bottom-full mb-2 hidden group-hover:block bg-black text-xs p-1 rounded border border-white/10 whitespace-nowrap z-10">
-                                        ${point.value.toFixed(0)} ({point.time})
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={result.equityCurve}>
+                            <defs>
+                                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#84cc16" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#84cc16" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                            <XAxis
+                                dataKey="time"
+                                stroke="#6b7280"
+                                tick={{ fill: '#6b7280', fontSize: 12 }}
+                                tickFormatter={(val) => val.split(' ')[0]}
+                            />
+                            <YAxis
+                                stroke="#6b7280"
+                                tick={{ fill: '#6b7280', fontSize: 12 }}
+                                domain={['auto', 'auto']}
+                            />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: '#0b1d16', borderColor: '#ffffff20', color: '#fff' }}
+                                itemStyle={{ color: '#84cc16' }}
+                                formatter={(value: number | undefined) => [`$${(value || 0).toFixed(2)}`, 'Equity']}
+                            />
+                            <Area
+                                type="monotone"
+                                dataKey="value"
+                                stroke="#84cc16"
+                                strokeWidth={2}
+                                fillOpacity={1}
+                                fill="url(#colorValue)"
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
                 </div>
             )}
         </div>

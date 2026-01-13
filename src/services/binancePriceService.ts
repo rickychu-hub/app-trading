@@ -14,6 +14,22 @@ class BinancePriceService {
         this.priceCallback = callback;
     }
 
+    async fetchHistoricalCandles(symbol: string, interval: string, limit: number = 1000): Promise<any[]> {
+        const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        // Map Binance response [time, open, high, low, close, volume, ...] to our Candle format
+        return data.map((d: any) => ({
+            time: new Date(d[0]).toISOString().split('T')[0] + ' ' + new Date(d[0]).toLocaleTimeString(),
+            open: parseFloat(d[1]),
+            high: parseFloat(d[2]),
+            low: parseFloat(d[3]),
+            close: parseFloat(d[4]),
+            volume: parseFloat(d[5])
+        }));
+    }
+
     connect() {
         if (this.ws?.readyState === WebSocket.OPEN) return;
 
