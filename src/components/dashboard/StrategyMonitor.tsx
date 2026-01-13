@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Play, Pause, Activity, TrendingUp, AlertTriangle, ArrowUp, ArrowDown, Minus, Power } from 'lucide-react';
+import { Play, Activity, ArrowUp, ArrowDown, Minus, Power } from 'lucide-react';
 import { useStrategyStore } from '../../store/strategyStore';
 import { binanceService } from '../../services/binancePriceService';
 import { analysisService } from '../../services/analysisService';
@@ -156,8 +156,8 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
                 {/* Status Badge & Master Switch */}
                 <div className="flex items-center gap-3">
                     <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${status === 'BUY' ? 'bg-accent/20 text-accent' :
-                            status === 'SELL' ? 'bg-red-500/20 text-red-500' :
-                                'bg-gray-500/20 text-gray-400'
+                        status === 'SELL' ? 'bg-red-500/20 text-red-500' :
+                            'bg-gray-500/20 text-gray-400'
                         }`}>
                         {status === 'BUY' && <ArrowUp size={14} />}
                         {status === 'SELL' && <ArrowDown size={14} />}
@@ -169,8 +169,8 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
                     <button
                         onClick={() => setIsAutoTrading(!isAutoTrading)}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isAutoTrading
-                                ? 'bg-green-500/20 border-green-500/50 text-green-400 hover:bg-green-500/30'
-                                : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
+                            ? 'bg-green-500/20 border-green-500/50 text-green-400 hover:bg-green-500/30'
+                            : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
                             }`}
                         title="Master Switch del Bot"
                     >
