@@ -12,8 +12,10 @@ interface StrategyState {
     bollingerStd: number;
     stopLossPct: number;
     takeProfitPct: number;
+    isAutoTrading: boolean; // Managed globally for Mobile Header access
 
     setStrategy: (s: StrategyType) => void;
+    setIsAutoTrading: (active: boolean) => void;
     setParams: (params: Partial<StrategyState>) => void;
 }
 
@@ -29,8 +31,10 @@ export const useStrategyStore = create<StrategyState>()(
             bollingerStd: 2,
             stopLossPct: 5,
             takeProfitPct: 10,
+            isAutoTrading: false,
 
             setStrategy: (strategy) => set({ strategy }),
+            setIsAutoTrading: (active) => set({ isAutoTrading: active }),
             setParams: (params) => set((state) => ({ ...state, ...params })),
         }),
         {

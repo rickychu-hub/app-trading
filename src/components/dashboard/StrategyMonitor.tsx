@@ -16,8 +16,8 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
     const [indicators, setIndicators] = useState<{ rsi: number, emaFast: number, emaSlow: number } | null>(null);
     const candlesRef = useRef<Candle[]>([]);
 
-    // Auto-Trading State
-    const [isAutoTrading, setIsAutoTrading] = useState(false);
+    // Auto-Trading State (Global)
+    const { isAutoTrading, setIsAutoTrading } = useStrategyStore();
     const lastTradeTimeRef = useRef<number>(0);
     const COOLDOWN_MS = 5 * 60 * 1000; // 5 Minutes
     const positionRef = useRef<'NONE' | 'LONG'>('NONE'); // Simple internal state tracking
