@@ -71,7 +71,6 @@ const NewsCard: React.FC<NewsCardProps> = ({ item, onSimulateTrade }) => {
                         SCORE: {item.sentiment_score.toFixed(2)}
                     </div>
                 )}
-                )}
             </div>
 
             <a href={item.enlace} target="_blank" rel="noopener noreferrer" className="block mb-2 group-hover:text-accent transition-colors">

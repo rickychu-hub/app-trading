@@ -1,4 +1,3 @@
-```
 import React, { useEffect, useState, useRef } from 'react';
 import { Play, Pause, Activity, TrendingUp, AlertTriangle, ArrowUp, ArrowDown, Minus, Power } from 'lucide-react';
 import { useStrategyStore } from '../../store/strategyStore';
@@ -126,15 +125,15 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
 
         // BUY Logic
         if (signal === 'BUY' && positionRef.current === 'NONE') {
-            console.log(`[AUTO - TRADER] Executing BUY @${ currentPrice } `);
-            onExecuteTrade('BUY', currentPrice, `${ strategyName } Signal`);
+            console.log(`[AUTO-TRADER] Executing BUY @${currentPrice}`);
+            onExecuteTrade('BUY', currentPrice, `${strategyName} Signal`);
             positionRef.current = 'LONG';
             lastTradeTimeRef.current = now;
         }
         // SELL Logic
         else if (signal === 'SELL' && positionRef.current === 'LONG') {
-            console.log(`[AUTO - TRADER] Executing SELL @${ currentPrice } `);
-            onExecuteTrade('SELL', currentPrice, `${ strategyName } Exit`);
+            console.log(`[AUTO-TRADER] Executing SELL @${currentPrice}`);
+            onExecuteTrade('SELL', currentPrice, `${strategyName} Exit`);
             positionRef.current = 'NONE';
             lastTradeTimeRef.current = now;
         }
@@ -156,11 +155,10 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
 
                 {/* Status Badge & Master Switch */}
                 <div className="flex items-center gap-3">
-                    <div className={`px - 3 py - 1 rounded - full text - xs font - bold flex items - center gap - 1 ${
-    status === 'BUY' ? 'bg-accent/20 text-accent' :
-        status === 'SELL' ? 'bg-red-500/20 text-red-500' :
-            'bg-gray-500/20 text-gray-400'
-} `}>
+                    <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${status === 'BUY' ? 'bg-accent/20 text-accent' :
+                            status === 'SELL' ? 'bg-red-500/20 text-red-500' :
+                                'bg-gray-500/20 text-gray-400'
+                        }`}>
                         {status === 'BUY' && <ArrowUp size={14} />}
                         {status === 'SELL' && <ArrowDown size={14} />}
                         {status === 'NEUTRAL' && <Minus size={14} />}
@@ -170,11 +168,10 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
 
                     <button
                         onClick={() => setIsAutoTrading(!isAutoTrading)}
-                        className={`flex items - center gap - 2 px - 3 py - 1.5 rounded - full border transition - all ${
-    isAutoTrading
-        ? 'bg-green-500/20 border-green-500/50 text-green-400 hover:bg-green-500/30'
-        : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
-} `}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${isAutoTrading
+                                ? 'bg-green-500/20 border-green-500/50 text-green-400 hover:bg-green-500/30'
+                                : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
+                            }`}
                         title="Master Switch del Bot"
                     >
                         <Power size={14} />
@@ -197,7 +194,7 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
                     <>
                         <div className="bg-black/20 rounded-lg p-3 flex justify-between items-center">
                             <p className="text-xs text-gray-500">EMA Spread (Fast/Slow)</p>
-                            <p className={`font - mono font - bold ${ indicators.emaFast > indicators.emaSlow ? 'text-green-400' : 'text-red-400' } `}>
+                            <p className={`font-mono font-bold ${indicators.emaFast > indicators.emaSlow ? 'text-green-400' : 'text-red-400'}`}>
                                 {((indicators.emaFast - indicators.emaSlow) / indicators.emaSlow * 100).toFixed(2)}%
                             </p>
                         </div>
@@ -209,11 +206,11 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
                         <div className="flex flex-col">
                             <p className="text-xs text-gray-500">RSI ({params.rsiPeriod})</p>
                             <div className="flex items-center gap-2">
-                                <span className={`font - mono font - bold ${ indicators.rsi > 70 ? 'text-red-400' : indicators.rsi < 30 ? 'text-accent' : 'text-white' } `}>
+                                <span className={`font-mono font-bold ${indicators.rsi > 70 ? 'text-red-400' : indicators.rsi < 30 ? 'text-accent' : 'text-white'}`}>
                                     {indicators.rsi.toFixed(1)}
                                 </span>
                                 <span className="text-[10px] text-gray-600">
-                                    {params.strategy === 'TREND_FOLLOWING' ? `Target: > ${ params.rsiThreshold } ` : `Target: < ${params.rsiThreshold}`}
+                                    {params.strategy === 'TREND_FOLLOWING' ? `Target: > ${params.rsiThreshold}` : `Target: < ${params.rsiThreshold}`}
                                 </span>
                             </div>
                         </div>
