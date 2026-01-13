@@ -1,26 +1,66 @@
 import React, { useState } from 'react';
-import { FlaskConical, TrendingUp, Activity, AlertTriangle, Play, Calendar, LineChart } from 'lucide-react';
+import { FlaskConical, TrendingUp, Activity, AlertTriangle, Play, Calendar, LineChart, Settings2, Target, Zap } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { backtestEngine, type BacktestResult } from '../../services/backtestEngine';
+import { backtestEngine, type BacktestResult, type StrategyType } from '../../services/backtestEngine';
 import { binanceService } from '../../services/binancePriceService';
+
+interface MetricCardProps {
+    label: string;
+    value: string | number;
+    icon: React.ElementType;
+    color: string;
+}
+
+const MetricCard: React.FC<MetricCardProps> = ({ label, value, icon: Icon, color }) => (
+    <div className="bg-[#0b1d16] p-4 rounded-xl border border-white/5 relative overflow-hidden group hover:border-accent/30 transition-all">
+        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Icon size={32} className={color} />
+        </div>
+        <p className="text-gray-400 text-xs mb-1">{label}</p>
+        <p className={`text-xl font-bold ${color.replace('text-', '') === 'text-white' ? 'text-white' : color}`}>
+            {value}
+        </p>
+    </div>
+);
 
 const AnalyticsPanel: React.FC = () => {
     const [isBacktesting, setIsBacktesting] = useState(false);
     const [result, setResult] = useState<BacktestResult | null>(null);
+
+    // Data Params
     const [symbol, setSymbol] = useState('BTCUSDT');
     const [timeframe, setTimeframe] = useState('4h');
+
+    // Strategy Params
+    const [strategy, setStrategy] = useState<StrategyType>('TREND_FOLLOWING');
+    const [emaFast, setEmaFast] = useState(9);
+    const [emaSlow, setEmaSlow] = useState(21);
+    const [rsiPeriod, setRsiPeriod] = useState(14);
+    const [rsiThreshold, setRsiThreshold] = useState(50);
+    const [bollingerPeriod, setBollingerPeriod] = useState(20);
+    const [bollingerStd, setBollingerStd] = useState(2);
+    const [stopLossPct, setStopLossPct] = useState(5); // displayed as %, stored as %
+    const [takeProfitPct, setTakeProfitPct] = useState(10); // displayed as %, stored as %
 
     const handleRunBacktest = async () => {
         setIsBacktesting(true);
         try {
             // Fetch Real Data
-            const candles = await binanceService.fetchHistoricalCandles(symbol, timeframe, 500); // 500 candles
+            const candles = await binanceService.fetchHistoricalCandles(symbol, timeframe, 500);
+
             // Run Backtest
             const backtestResult = backtestEngine.runBacktest(candles, {
                 initialCapital: 10000,
                 riskPerTrade: 0.02,
-                smaLengthFast: 5,
-                smaLengthSlow: 15
+                strategy,
+                emaFast,
+                emaSlow,
+                rsiPeriod,
+                rsiThreshold,
+                bollingerPeriod,
+                bollingerStd,
+                stopLossPct: stopLossPct / 100,
+                takeProfitPct: takeProfitPct / 100
             });
             setResult(backtestResult);
         } catch (error) {
@@ -32,52 +72,123 @@ const AnalyticsPanel: React.FC = () => {
     };
 
     return (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-6 animate-fade-in pb-12">
             {/* Header */}
             <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-accent to-emerald-400 bg-clip-text text-transparent mb-2">
-                    Laboratorio de Estrategias
+                    Laboratorio de Estrategias Pro
                 </h1>
                 <p className="text-gray-400">
-                    Valide matemáticamente sus ideas con datos reales de Binance.
+                    Optimización algorítmica con datos reales de Binance.
                 </p>
             </div>
 
-            {/* Controls */}
-            <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 shadow-xl">
-                <div className="flex flex-col md:flex-row items-center gap-6 justify-between">
-                    <div className="flex flex-wrap gap-4 items-center">
+            {/* Controls Container */}
+            <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 shadow-xl grid lg:grid-cols-3 gap-8">
+
+                {/* 1. Data Selection */}
+                <div className="space-y-4">
+                    <h3 className="text-white font-semibold flex items-center gap-2">
+                        <LineChart size={18} className="text-accent" /> Datos de Mercado
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1 ml-1">Symbol</label>
+                            <label className="text-xs text-gray-500 block mb-1">Symbol</label>
+                            <select value={symbol} onChange={e => setSymbol(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-accent">
+                                <option value="BTCUSDT">BTC/USDT</option>
+                                <option value="ETHUSDT">ETH/USDT</option>
+                                <option value="SOLUSDT">SOL/USDT</option>
+                                <option value="XRPUSDT">XRP/USDT</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500 block mb-1">Timeframe</label>
+                            <select value={timeframe} onChange={e => setTimeframe(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white outline-none focus:border-accent">
+                                <option value="15m">15m</option>
+                                <option value="1h">1h</option>
+                                <option value="4h">4h</option>
+                                <option value="1d">1d</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. Strategy Config */}
+                <div className="space-y-4 lg:col-span-2">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-white font-semibold flex items-center gap-2">
+                            <Settings2 size={18} className="text-purple-400" /> Lógica de Estrategia
+                        </h3>
+                        <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
+                            <button
+                                onClick={() => setStrategy('TREND_FOLLOWING')}
+                                className={`px-3 py-1 text-xs rounded transition-all ${strategy === 'TREND_FOLLOWING' ? 'bg-purple-500/20 text-purple-400' : 'text-gray-500 hover:text-white'}`}
+                            >Trend Follower</button>
+                            <button
+                                onClick={() => setStrategy('MEAN_REVERSION')}
+                                className={`px-3 py-1 text-xs rounded transition-all ${strategy === 'MEAN_REVERSION' ? 'bg-blue-500/20 text-blue-400' : 'text-gray-500 hover:text-white'}`}
+                            >Mean Reversion</button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {strategy === 'TREND_FOLLOWING' ? (
+                            <>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">EMA Fast</label>
+                                    <input type="number" value={emaFast} onChange={e => setEmaFast(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">EMA Slow</label>
+                                    <input type="number" value={emaSlow} onChange={e => setEmaSlow(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">RSI Period</label>
+                                    <input type="number" value={rsiPeriod} onChange={e => setRsiPeriod(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">RSI Filter ({'>'})</label>
+                                    <input type="number" value={rsiThreshold} onChange={e => setRsiThreshold(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">BB Period</label>
+                                    <input type="number" value={bollingerPeriod} onChange={e => setBollingerPeriod(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">Std Dev</label>
+                                    <input type="number" value={bollingerStd} onChange={e => setBollingerStd(parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">RSI Period</label>
+                                    <input type="number" value={rsiPeriod} onChange={e => setRsiPeriod(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">RSI Filter ({'<'})</label>
+                                    <input type="number" value={rsiThreshold} onChange={e => setRsiThreshold(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* 3. Risk Management */}
+                <div className="lg:col-span-3 border-t border-white/5 pt-4 grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs text-gray-500 block mb-1">Stop Loss %</label>
                             <div className="relative">
-                                <LineChart className="absolute left-3 top-3 text-gray-500" size={16} />
-                                <select
-                                    value={symbol}
-                                    onChange={(e) => setSymbol(e.target.value)}
-                                    className="bg-black/40 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white focus:border-accent outline-none appearance-none min-w-[140px]"
-                                >
-                                    <option value="BTCUSDT">BTC/USDT</option>
-                                    <option value="ETHUSDT">ETH/USDT</option>
-                                    <option value="SOLUSDT">SOL/USDT</option>
-                                    <option value="BNBUSDT">BNB/USDT</option>
-                                </select>
+                                <span className="absolute left-3 top-2 text-xs text-red-500 font-bold">SL</span>
+                                <input type="number" value={stopLossPct} onChange={e => setStopLossPct(parseFloat(e.target.value))} className="w-full bg-red-500/10 border border-red-500/20 rounded-lg pl-8 p-2 text-white font-mono text-sm focus:border-red-500 outline-none" />
                             </div>
                         </div>
-
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1 ml-1">Timeframe</label>
+                            <label className="text-xs text-gray-500 block mb-1">Take Profit %</label>
                             <div className="relative">
-                                <Calendar className="absolute left-3 top-3 text-gray-500" size={16} />
-                                <select
-                                    value={timeframe}
-                                    onChange={(e) => setTimeframe(e.target.value)}
-                                    className="bg-black/40 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white focus:border-accent outline-none appearance-none min-w-[140px]"
-                                >
-                                    <option value="15m">15 Minutes</option>
-                                    <option value="1h">1 Hour</option>
-                                    <option value="4h">4 Hours</option>
-                                    <option value="1d">1 Day</option>
-                                </select>
+                                <span className="absolute left-3 top-2 text-xs text-green-500 font-bold">TP</span>
+                                <input type="number" value={takeProfitPct} onChange={e => setTakeProfitPct(parseFloat(e.target.value))} className="w-full bg-green-500/10 border border-green-500/20 rounded-lg pl-8 p-2 text-white font-mono text-sm focus:border-green-500 outline-none" />
                             </div>
                         </div>
                     </div>
@@ -85,65 +196,36 @@ const AnalyticsPanel: React.FC = () => {
                     <button
                         onClick={handleRunBacktest}
                         disabled={isBacktesting}
-                        className="w-full md:w-auto flex items-center justify-center gap-2 bg-accent hover:bg-accent/90 text-black px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(132,204,22,0.3)] hover:shadow-[0_0_30px_rgba(132,204,22,0.5)]"
+                        className="w-full bg-accent hover:bg-accent/90 text-black px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(132,204,22,0.3)] hover:shadow-[0_0_30px_rgba(132,204,22,0.5)] flex items-center justify-center gap-2 h-[42px]"
                     >
-                        {isBacktesting ? (
-                            <Activity className="animate-spin" />
-                        ) : (
-                            <Play size={20} />
-                        )}
-                        {isBacktesting ? 'Computando...' : 'Ejecutar Backtest'}
+                        {isBacktesting ? <Activity className="animate-spin" /> : <Play size={20} />}
+                        {isBacktesting ? 'Optimizando...' : 'Ejecutar Estrategia'}
                     </button>
+
+                    <div className="text-xs text-gray-500 text-center md:text-right">
+                        Capital Inicial: $10,000 | Fees: 0.1% | Slippage: 0.05%
+                    </div>
                 </div>
             </div>
 
             {/* Results Grid */}
             {result && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Activity size={40} className="text-blue-400" />
-                        </div>
-                        <p className="text-gray-400 text-sm mb-1">Total Trades</p>
-                        <p className="text-3xl font-bold text-white">{result.totalTrades}</p>
-                    </div>
-
-                    <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <FlaskConical size={40} className="text-purple-400" />
-                        </div>
-                        <p className="text-gray-400 text-sm mb-1">Win Rate</p>
-                        <p className={`text-3xl font-bold ${result.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                            {result.winRate.toFixed(1)}%
-                        </p>
-                    </div>
-
-                    <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <TrendingUp size={40} className="text-emerald-400" />
-                        </div>
-                        <p className="text-gray-400 text-sm mb-1">Net P&L</p>
-                        <p className={`text-3xl font-bold ${result.netPnL >= 0 ? 'text-accent' : 'text-red-500'}`}>
-                            ${result.netPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                    </div>
-
-                    <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <AlertTriangle size={40} className="text-orange-400" />
-                        </div>
-                        <p className="text-gray-400 text-sm mb-1">Max Drawdown</p>
-                        <p className="text-3xl font-bold text-orange-400">
-                            {result.maxDrawdown.toFixed(2)}%
-                        </p>
-                    </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <MetricCard label="Total Trades" value={result.totalTrades} icon={Activity} color="text-blue-400" />
+                    <MetricCard label="Win Rate" value={`${result.winRate.toFixed(1)}%`} icon={FlaskConical} color={result.winRate >= 50 ? "text-green-400" : "text-red-400"} />
+                    <MetricCard label="Net P&L" value={`$${result.netPnL.toLocaleString()}`} icon={TrendingUp} color={result.netPnL >= 0 ? "text-accent" : "text-red-500"} />
+                    <MetricCard label="Max Drawdown" value={`${result.maxDrawdown.toFixed(2)}%`} icon={AlertTriangle} color="text-orange-400" />
+                    <MetricCard label="Profit Factor" value={result.profitFactor.toFixed(2)} icon={Target} color="text-cyan-400" />
+                    <MetricCard label="Avg Trade" value={`$${result.avgTrade.toFixed(2)}`} icon={Zap} color={result.avgTrade >= 0 ? "text-green-400" : "text-red-400"} />
                 </div>
             )}
 
             {/* Equity Curve Chart */}
             {result && (
                 <div className="bg-[#0b1d16] p-6 rounded-2xl border border-white/5 h-[400px]">
-                    <h3 className="text-lg font-bold text-white mb-4">Curva de Equidad</h3>
+                    <h3 className="text-gray-400 text-sm mb-4 flex items-center gap-2">
+                        <LineChart size={16} /> Curva de Equidad
+                    </h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={result.equityCurve}>
                             <defs>
@@ -152,21 +234,23 @@ const AnalyticsPanel: React.FC = () => {
                                     <stop offset="95%" stopColor="#84cc16" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                             <XAxis
                                 dataKey="time"
                                 stroke="#6b7280"
                                 tick={{ fill: '#6b7280', fontSize: 12 }}
-                                tickFormatter={(val) => val.split(' ')[0]}
+                                tickFormatter={(val) => new Date(val).toLocaleDateString()}
                             />
                             <YAxis
                                 stroke="#6b7280"
                                 tick={{ fill: '#6b7280', fontSize: 12 }}
                                 domain={['auto', 'auto']}
+                                tickFormatter={(val) => `$${val}`}
                             />
                             <Tooltip
                                 contentStyle={{ backgroundColor: '#0b1d16', borderColor: '#ffffff20', color: '#fff' }}
                                 itemStyle={{ color: '#84cc16' }}
+                                labelFormatter={(label) => new Date(label).toLocaleString()}
                                 formatter={(value: number | undefined) => [`$${(value || 0).toFixed(2)}`, 'Equity']}
                             />
                             <Area
