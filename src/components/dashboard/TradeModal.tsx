@@ -31,8 +31,7 @@ const TradeModal: React.FC<TradeModalProps> = ({ isOpen, onClose, onConfirm, ini
         // Cleanup: unsubscribe when modal closes or ticker changes (optional, but good practice)
         return () => {
             if (initialTicker) {
-                // We keep subscription active for now as moving between modals is common
-                // unsubscribeFromSymbol(initialTicker); 
+                unsubscribeFromSymbol(initialTicker);
             }
         };
     }, [initialTicker, isOpen]);

@@ -105,7 +105,9 @@ class BinancePriceService {
             params: streams,
             id: Date.now()
         };
-        this.ws.send(JSON.stringify(payload));
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(payload));
+        }
     }
 
     disconnect() {
