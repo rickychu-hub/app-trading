@@ -1,3 +1,5 @@
+import { analysisService } from './analysisService';
+
 export interface Candle {
     time: number;
     open: number;
@@ -52,113 +54,6 @@ export class BacktestEngine {
     private feeRate = 0.001; // 0.1% per side
     private slippage = 0.0005; // 0.05% per side
 
-    // --- Indicators ---
-
-    private calculateSMA(data: Candle[], index: number, length: number): number | null {
-        if (index < length - 1) return null;
-        let sum = 0;
-        for (let i = 0; i < length; i++) {
-            sum += data[index - i].close;
-        }
-        return sum / length;
-    }
-
-    private calculateEMA(data: Candle[], index: number, length: number, prevEMA: number | null): number | null {
-        if (index < 0) return null;
-        const close = data[index].close;
-        if (prevEMA === null) {
-            // Initial SMA as first EMA
-            return this.calculateSMA(data, index, length);
-        }
-        const multiplier = 2 / (length + 1);
-        return (close - prevEMA) * multiplier + prevEMA;
-    }
-
-    // Pre-calculate EMAs for the whole series to allow easier lookup
-    private generateEMASeries(candles: Candle[], length: number): (number | null)[] {
-        const emas: (number | null)[] = [];
-        let prev: number | null = null;
-        for (let i = 0; i < candles.length; i++) {
-            const ema = this.calculateEMA(candles, i, length, prev);
-            emas.push(ema);
-            prev = ema;
-        }
-        return emas;
-    }
-
-    private calculateRSI(candles: Candle[], i: number, period: number): number | null {
-        if (i < period) return null;
-        // Simple RSI implementation (could be optimized with series)
-        let gains = 0;
-        let losses = 0;
-
-        // Calculate initial average (simple)
-        for (let j = i - period + 1; j <= i; j++) {
-            const change = candles[j].close - candles[j - 1].close;
-            if (change >= 0) gains += change;
-            else losses -= change;
-        }
-
-        if (losses === 0) return 100;
-        const rs = (gains / period) / (losses / period);
-        return 100 - (100 / (1 + rs));
-    }
-
-    // Series RSI for efficiency/correct smoothing
-    private generateRSISeries(candles: Candle[], period: number): (number | null)[] {
-        const rsiSeries: (number | null)[] = new Array(candles.length).fill(null);
-        if (candles.length <= period) return rsiSeries;
-
-        let avgGain = 0;
-        let avgLoss = 0;
-
-        // First average
-        for (let i = 1; i <= period; i++) {
-            const change = candles[i].close - candles[i - 1].close;
-            if (change > 0) avgGain += change;
-            else avgLoss -= change;
-        }
-        avgGain /= period;
-        avgLoss /= period;
-
-        rsiSeries[period] = 100 - (100 / (1 + avgGain / (avgLoss === 0 ? 1 : avgLoss))); // Avoid div/0
-
-        for (let i = period + 1; i < candles.length; i++) {
-            const change = candles[i].close - candles[i - 1].close;
-            const gain = change > 0 ? change : 0;
-            const loss = change < 0 ? -change : 0;
-
-            avgGain = (avgGain * (period - 1) + gain) / period;
-            avgLoss = (avgLoss * (period - 1) + loss) / period;
-
-            if (avgLoss === 0) {
-                rsiSeries[i] = 100;
-            } else {
-                const rs = avgGain / avgLoss;
-                rsiSeries[i] = 100 - (100 / (1 + rs));
-            }
-        }
-        return rsiSeries;
-    }
-
-    private calculateBollingerBands(candles: Candle[], i: number, period: number, stdDevMult: number): { upper: number, lower: number, middle: number } | null {
-        const middle = this.calculateSMA(candles, i, period);
-        if (middle === null) return null;
-
-        let sumSq = 0;
-        for (let j = 0; j < period; j++) {
-            const val = candles[i - j].close;
-            sumSq += Math.pow(val - middle, 2);
-        }
-
-        const stdDev = Math.sqrt(sumSq / period);
-        return {
-            middle,
-            upper: middle + (stdDev * stdDevMult),
-            lower: middle - (stdDev * stdDevMult)
-        };
-    }
-
     runBacktest(candles: Candle[], params: BacktestParams): BacktestResult {
         let capital = params.initialCapital;
         const equityCurve = [{ time: candles[0].time, value: capital }];
@@ -170,10 +65,10 @@ export class BacktestEngine {
             quantity: number;
         } | null = null;
 
-        // Pre-calculate Series where needed for performance/correctness
-        const emaFastSeries = this.generateEMASeries(candles, params.emaFast);
-        const emaSlowSeries = this.generateEMASeries(candles, params.emaSlow);
-        const rsiSeries = this.generateRSISeries(candles, params.rsiPeriod);
+        // Pre-calculate Series using AnalysisService
+        const emaFastSeries = analysisService.generateEMASeries(candles, params.emaFast);
+        const emaSlowSeries = analysisService.generateEMASeries(candles, params.emaSlow);
+        const rsiSeries = analysisService.generateRSISeries(candles, params.rsiPeriod);
 
         // Iterate
         for (let i = 0; i < candles.length - 1; i++) {
@@ -206,7 +101,7 @@ export class BacktestEngine {
 
             } else if (params.strategy === 'MEAN_REVERSION') {
                 // Bollinger Bands
-                const bb = this.calculateBollingerBands(candles, i, params.bollingerPeriod, params.bollingerStd);
+                const bb = analysisService.calculateBollingerBands(candles, i, params.bollingerPeriod, params.bollingerStd);
 
                 if (bb && rsi !== null) {
                     // Buy: Close < Lower Band (Oversold) AND RSI < Threshold (Deep oversold)
@@ -234,7 +129,7 @@ export class BacktestEngine {
             if (activeTrade && activeTrade.type === 'LONG' && signal === 'SELL') {
                 // Close at Open
                 const exitPrice = nextCandle.open * (1 - this.slippage);
-                this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'SIGNAL', trades, capital, (pnl) => capital += pnl);
+                this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'SIGNAL', trades, (pnl) => capital += pnl);
                 activeTrade = null;
             }
 
@@ -247,14 +142,14 @@ export class BacktestEngine {
                 if (nextCandle.low <= stopPrice) {
                     // SL Hit. Slippage applied to Stop Price usually
                     const exitPrice = stopPrice * (1 - this.slippage);
-                    this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'STOP_LOSS', trades, capital, (pnl) => capital += pnl);
+                    this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'STOP_LOSS', trades, (pnl) => capital += pnl);
                     activeTrade = null;
                 }
                 // Check High for TP (else-if implies OCO - One Cancels Other)
                 else if (nextCandle.high >= takePrice) {
                     // TP Hit
                     const exitPrice = takePrice * (1 - this.slippage);
-                    this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'TAKE_PROFIT', trades, capital, (pnl) => capital += pnl);
+                    this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'TAKE_PROFIT', trades, (pnl) => capital += pnl);
                     activeTrade = null;
                 }
             }
@@ -282,11 +177,11 @@ export class BacktestEngine {
 
                 if (nextCandle.low <= stopPrice) {
                     const exitPrice = stopPrice * (1 - this.slippage);
-                    this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'STOP_LOSS', trades, capital, (pnl) => capital += pnl);
+                    this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'STOP_LOSS', trades, (pnl) => capital += pnl);
                     activeTrade = null;
                 } else if (nextCandle.high >= takePrice) {
                     const exitPrice = takePrice * (1 - this.slippage);
-                    this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'TAKE_PROFIT', trades, capital, (pnl) => capital += pnl);
+                    this.closeTrade(activeTrade, exitPrice, nextCandle.time, 'TAKE_PROFIT', trades, (pnl) => capital += pnl);
                     activeTrade = null;
                 }
             }
@@ -345,7 +240,6 @@ export class BacktestEngine {
         exitTime: number,
         reason: Trade['exitReason'],
         trades: Trade[],
-        currentCapital: number,
         updateCapital: (pnl: number) => void
     ) {
         const entryCost = trade.entryPrice * trade.quantity;

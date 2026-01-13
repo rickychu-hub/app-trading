@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { FlaskConical, TrendingUp, Activity, AlertTriangle, Play, Calendar, LineChart, Settings2, Target, Zap } from 'lucide-react';
+import { FlaskConical, TrendingUp, Activity, AlertTriangle, Play, LineChart, Settings2, Target, Zap } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { backtestEngine, type BacktestResult, type StrategyType } from '../../services/backtestEngine';
+import { backtestEngine, type BacktestResult } from '../../services/backtestEngine';
 import { binanceService } from '../../services/binancePriceService';
+import { useStrategyStore } from '../../store/strategyStore';
 
 interface MetricCardProps {
     label: string;
@@ -31,16 +32,8 @@ const AnalyticsPanel: React.FC = () => {
     const [symbol, setSymbol] = useState('BTCUSDT');
     const [timeframe, setTimeframe] = useState('4h');
 
-    // Strategy Params
-    const [strategy, setStrategy] = useState<StrategyType>('TREND_FOLLOWING');
-    const [emaFast, setEmaFast] = useState(9);
-    const [emaSlow, setEmaSlow] = useState(21);
-    const [rsiPeriod, setRsiPeriod] = useState(14);
-    const [rsiThreshold, setRsiThreshold] = useState(50);
-    const [bollingerPeriod, setBollingerPeriod] = useState(20);
-    const [bollingerStd, setBollingerStd] = useState(2);
-    const [stopLossPct, setStopLossPct] = useState(5); // displayed as %, stored as %
-    const [takeProfitPct, setTakeProfitPct] = useState(10); // displayed as %, stored as %
+    // Strategy Params via Store
+    const store = useStrategyStore();
 
     const handleRunBacktest = async () => {
         setIsBacktesting(true);
@@ -52,15 +45,15 @@ const AnalyticsPanel: React.FC = () => {
             const backtestResult = backtestEngine.runBacktest(candles, {
                 initialCapital: 10000,
                 riskPerTrade: 0.02,
-                strategy,
-                emaFast,
-                emaSlow,
-                rsiPeriod,
-                rsiThreshold,
-                bollingerPeriod,
-                bollingerStd,
-                stopLossPct: stopLossPct / 100,
-                takeProfitPct: takeProfitPct / 100
+                strategy: store.strategy,
+                emaFast: store.emaFast,
+                emaSlow: store.emaSlow,
+                rsiPeriod: store.rsiPeriod,
+                rsiThreshold: store.rsiThreshold,
+                bollingerPeriod: store.bollingerPeriod,
+                bollingerStd: store.bollingerStd,
+                stopLossPct: store.stopLossPct / 100,
+                takeProfitPct: store.takeProfitPct / 100
             });
             setResult(backtestResult);
         } catch (error) {
@@ -121,53 +114,53 @@ const AnalyticsPanel: React.FC = () => {
                         </h3>
                         <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
                             <button
-                                onClick={() => setStrategy('TREND_FOLLOWING')}
-                                className={`px-3 py-1 text-xs rounded transition-all ${strategy === 'TREND_FOLLOWING' ? 'bg-purple-500/20 text-purple-400' : 'text-gray-500 hover:text-white'}`}
+                                onClick={() => store.setStrategy('TREND_FOLLOWING')}
+                                className={`px-3 py-1 text-xs rounded transition-all ${store.strategy === 'TREND_FOLLOWING' ? 'bg-purple-500/20 text-purple-400' : 'text-gray-500 hover:text-white'}`}
                             >Trend Follower</button>
                             <button
-                                onClick={() => setStrategy('MEAN_REVERSION')}
-                                className={`px-3 py-1 text-xs rounded transition-all ${strategy === 'MEAN_REVERSION' ? 'bg-blue-500/20 text-blue-400' : 'text-gray-500 hover:text-white'}`}
+                                onClick={() => store.setStrategy('MEAN_REVERSION')}
+                                className={`px-3 py-1 text-xs rounded transition-all ${store.strategy === 'MEAN_REVERSION' ? 'bg-blue-500/20 text-blue-400' : 'text-gray-500 hover:text-white'}`}
                             >Mean Reversion</button>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {strategy === 'TREND_FOLLOWING' ? (
+                        {store.strategy === 'TREND_FOLLOWING' ? (
                             <>
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">EMA Fast</label>
-                                    <input type="number" value={emaFast} onChange={e => setEmaFast(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
+                                    <input type="number" value={store.emaFast} onChange={e => store.setParams({ emaFast: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">EMA Slow</label>
-                                    <input type="number" value={emaSlow} onChange={e => setEmaSlow(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
+                                    <input type="number" value={store.emaSlow} onChange={e => store.setParams({ emaSlow: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">RSI Period</label>
-                                    <input type="number" value={rsiPeriod} onChange={e => setRsiPeriod(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
+                                    <input type="number" value={store.rsiPeriod} onChange={e => store.setParams({ rsiPeriod: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">RSI Filter ({'>'})</label>
-                                    <input type="number" value={rsiThreshold} onChange={e => setRsiThreshold(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
+                                    <input type="number" value={store.rsiThreshold} onChange={e => store.setParams({ rsiThreshold: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-purple-500 outline-none" />
                                 </div>
                             </>
                         ) : (
                             <>
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">BB Period</label>
-                                    <input type="number" value={bollingerPeriod} onChange={e => setBollingerPeriod(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
+                                    <input type="number" value={store.bollingerPeriod} onChange={e => store.setParams({ bollingerPeriod: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">Std Dev</label>
-                                    <input type="number" value={bollingerStd} onChange={e => setBollingerStd(parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
+                                    <input type="number" value={store.bollingerStd} onChange={e => store.setParams({ bollingerStd: parseFloat(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">RSI Period</label>
-                                    <input type="number" value={rsiPeriod} onChange={e => setRsiPeriod(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
+                                    <input type="number" value={store.rsiPeriod} onChange={e => store.setParams({ rsiPeriod: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">RSI Filter ({'<'})</label>
-                                    <input type="number" value={rsiThreshold} onChange={e => setRsiThreshold(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
+                                    <input type="number" value={store.rsiThreshold} onChange={e => store.setParams({ rsiThreshold: parseInt(e.target.value) })} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-blue-500 outline-none" />
                                 </div>
                             </>
                         )}
@@ -181,14 +174,14 @@ const AnalyticsPanel: React.FC = () => {
                             <label className="text-xs text-gray-500 block mb-1">Stop Loss %</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-2 text-xs text-red-500 font-bold">SL</span>
-                                <input type="number" value={stopLossPct} onChange={e => setStopLossPct(parseFloat(e.target.value))} className="w-full bg-red-500/10 border border-red-500/20 rounded-lg pl-8 p-2 text-white font-mono text-sm focus:border-red-500 outline-none" />
+                                <input type="number" value={store.stopLossPct} onChange={e => store.setParams({ stopLossPct: parseFloat(e.target.value) })} className="w-full bg-red-500/10 border border-red-500/20 rounded-lg pl-8 p-2 text-white font-mono text-sm focus:border-red-500 outline-none" />
                             </div>
                         </div>
                         <div>
                             <label className="text-xs text-gray-500 block mb-1">Take Profit %</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-2 text-xs text-green-500 font-bold">TP</span>
-                                <input type="number" value={takeProfitPct} onChange={e => setTakeProfitPct(parseFloat(e.target.value))} className="w-full bg-green-500/10 border border-green-500/20 rounded-lg pl-8 p-2 text-white font-mono text-sm focus:border-green-500 outline-none" />
+                                <input type="number" value={store.takeProfitPct} onChange={e => store.setParams({ takeProfitPct: parseFloat(e.target.value) })} className="w-full bg-green-500/10 border border-green-500/20 rounded-lg pl-8 p-2 text-white font-mono text-sm focus:border-green-500 outline-none" />
                             </div>
                         </div>
                     </div>

@@ -8,6 +8,7 @@ import SettingsPanel from './components/dashboard/SettingsPanel';
 import { supabase } from './lib/supabaseClient';
 import { notificationService } from './services/notificationService';
 import AnalyticsPanel from './components/dashboard/AnalyticsPanel';
+import StrategyMonitor from './components/dashboard/StrategyMonitor';
 import type { NewsItem } from './data/mockData';
 import { formatQuantity } from './utils/tradeUtils';
 
@@ -92,7 +93,10 @@ function App() {
       </div>
 
       {activeView === 'news' ? (
-        <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
+        <div className="space-y-6">
+          <StrategyMonitor />
+          <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
+        </div>
       ) : activeView === 'portfolio' ? (
         <PaperTradingPanel />
       ) : activeView === 'journal' ? (
