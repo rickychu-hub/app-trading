@@ -18,29 +18,36 @@ interface BotState {
     setAssets: (tickers: string[]) => void;
 }
 
-export const useBotStore = create<BotState>((set) => ({
-    logs: [],
-    selectedAssets: ['BTC'], // Default
+import { persist } from 'zustand/middleware';
 
-    addLog: (log) => set((state) => {
-        const newLog = { ...log, id: Math.random().toString(36).substr(2, 9) };
-        // Keep last 50 logs to prevent memory overflow
-        return { logs: [newLog, ...state.logs].slice(0, 50) };
-    }),
+export const useBotStore = create<BotState>()(
+    persist(
+        (set) => ({
+            logs: [],
+            selectedAssets: ['BTC'], // Default
 
-    clearLogs: () => set({ logs: [] }),
+            addLog: (log) => set((state) => {
+                const newLog = { ...log, id: Math.random().toString(36).substr(2, 9) };
+                // Keep last 50 logs to prevent memory overflow
+                return { logs: [newLog, ...state.logs].slice(0, 50) };
+            }),
 
-    toggleAsset: (ticker) => set((state) => {
-        const exists = state.selectedAssets.includes(ticker.toUpperCase());
-        if (exists) {
-            // Prevent removing the last one if you want at least one selected? 
-            // Or allow empty. Let's allow empty or check length.
-            if (state.selectedAssets.length === 1) return state; // Keep at least one
-            return { selectedAssets: state.selectedAssets.filter(t => t !== ticker.toUpperCase()) };
-        } else {
-            return { selectedAssets: [...state.selectedAssets, ticker.toUpperCase()] };
+            clearLogs: () => set({ logs: [] }),
+
+            toggleAsset: (ticker) => set((state) => {
+                const exists = state.selectedAssets.includes(ticker.toUpperCase());
+                if (exists) {
+                    if (state.selectedAssets.length === 1) return state; // Keep at least one
+                    return { selectedAssets: state.selectedAssets.filter(t => t !== ticker.toUpperCase()) };
+                } else {
+                    return { selectedAssets: [...state.selectedAssets, ticker.toUpperCase()] };
+                }
+            }),
+
+            setAssets: (tickers) => set({ selectedAssets: tickers }),
+        }),
+        {
+            name: 'bot-storage',
         }
-    }),
-
-    setAssets: (tickers) => set({ selectedAssets: tickers }),
-}));
+    )
+);

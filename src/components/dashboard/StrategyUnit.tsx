@@ -66,25 +66,28 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade }) =
 
             setStatus(newStatus);
 
-            // Logging (Heartbeat every 60s OR on Status Change)
+            // Logging (Heartbeat every 30s OR on Status Change)
             const now = Date.now();
             const timeSinceLastLog = now - lastLogTimeRef.current;
+            const shouldLog = status !== newStatus || timeSinceLastLog > 30000;
 
-            // Only log if "Auto Trading" is effectively inspecting (we assume it is if component runs)
-            // But we can check global isAutoTrading in the store if we want to silence logs when off.
-            // User requested logs "Cuando el AutoTrader evalue".
+            if (shouldLog && params.isAutoTrading) {
+                let logDecision = newStatus === 'NEUTRAL' ? 'WAIT' : newStatus;
+                let logReason = reason;
 
-            if (timeSinceLastLog > 60000 || status !== newStatus) {
-                if (params.isAutoTrading) {
-                    addLog({
-                        timestamp: new Date().toLocaleTimeString(),
-                        ticker: ticker,
-                        rsi: rsi,
-                        decision: newStatus === 'NEUTRAL' ? 'WAIT' : newStatus,
-                        reason: reason
-                    });
-                    lastLogTimeRef.current = now;
+                // Heartbeat / Keep-Alive message
+                if (status === newStatus && newStatus === 'NEUTRAL') {
+                    logReason = `[INFO] Monitoring... Price stable at $${currentPrice.toFixed(0)}`;
                 }
+
+                addLog({
+                    timestamp: new Date().toLocaleTimeString(),
+                    ticker: ticker,
+                    rsi: rsi,
+                    decision: logDecision as any,
+                    reason: logReason
+                });
+                lastLogTimeRef.current = now;
             }
 
             // Execution
@@ -137,6 +140,19 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade }) =
             binanceService.removeListener(handleUpdate);
         };
     }, [ticker]);
+
+    // Immediate Log on Start
+    useEffect(() => {
+        if (params.isAutoTrading) {
+            addLog({
+                timestamp: new Date().toLocaleTimeString(),
+                ticker: ticker,
+                rsi: indicators?.rsi || 0,
+                decision: 'WAIT',
+                reason: "[START] Engine active. Analyzing..."
+            });
+        }
+    }, [params.isAutoTrading]);
 
     return (
         <div className="bg-black/20 border border-white/5 rounded-xl p-4 relative overflow-hidden group hover:border-white/10 transition-all">
