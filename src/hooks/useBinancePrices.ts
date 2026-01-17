@@ -23,11 +23,12 @@ export const useBinancePrices = (tickers: string[]) => {
             const normalizedSymbol = symbol.replace('USDT', '');
 
             // Allow update if it matches one of our requested tickers (either exact match or base match)
-            const isRelevant = tickers.some(t =>
-                t === symbol ||
-                t === normalizedSymbol ||
-                `${t}USDT` === symbol
-            );
+            const isRelevant = tickers.some(t => {
+                const upperT = t.toUpperCase();
+                return upperT === symbol ||
+                    upperT === normalizedSymbol ||
+                    `${upperT}USDT` === symbol;
+            });
 
             if (isRelevant) {
                 setPrices(prev => ({

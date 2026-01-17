@@ -71,7 +71,7 @@ const PaperTradingPanel: React.FC = () => {
     // Real-time Prices from Binance
     const activeTickers = useMemo(() => {
         const tickers = new Set<string>();
-        trades.forEach(t => tickers.add(t.ticker));
+        trades.forEach(t => tickers.add(t.ticker.toUpperCase()));
         return Array.from(tickers);
     }, [trades]);
 
@@ -87,7 +87,10 @@ const PaperTradingPanel: React.FC = () => {
 
             trades.forEach(t => {
                 // Priority: Live Price -> Previous Price -> Entry Price
-                const live = livePrices[t.ticker] || livePrices[`${t.ticker}USDT`];
+                // Lookup using Uppercase because useBinancePrices normalizes to "BTC" (Base) or "BTCUSDT"
+                const tickerUpper = t.ticker.toUpperCase();
+                const live = livePrices[tickerUpper] || livePrices[`${tickerUpper}USDT`];
+
                 if (live && live !== next[t.ticker]) {
                     next[t.ticker] = live;
                     changed = true;
