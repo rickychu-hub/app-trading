@@ -261,14 +261,23 @@ const PaperTradingPanel: React.FC = () => {
                             </thead>
                             <tbody>
                                 {trades.map((trade) => {
-                                    const currentPrice = currentPrices[trade.ticker] || trade.entry_price;
+                                    // Aggressive Normalization & Forced Conversion
+                                    const ticker = trade.ticker?.trim().toUpperCase();
+                                    const rawLivePrice = livePrices[ticker] || livePrices[`${ticker}USDT`];
+                                    const livePrice = rawLivePrice ? Number(rawLivePrice) : undefined;
+
+                                    // Use live price if available, otherwise undefined (to show Connecting...)
+                                    // DO NOT Fallback to trade.entry_price for the display to ensure we know if connection is working
+
+                                    const currentPriceDisplay = livePrice || undefined;
 
                                     // Logic for legacy trades support
                                     const investedAmt = trade.invested_amount || trade.entry_price;
                                     const qty = trade.quantity || (trade.entry_price > 0 ? investedAmt / trade.entry_price : 0);
 
-                                    const currentValue = currentPrice * qty;
-                                    const pnl = currentValue - investedAmt;
+                                    // Calculate P&L only if we have a live price
+                                    const currentValue = livePrice ? (livePrice * qty) : (investedAmt); // Default to invested if no price (0 P&L)
+                                    const pnl = livePrice ? (currentValue - investedAmt) : 0;
                                     const pnlPercent = investedAmt > 0 ? (pnl / investedAmt) * 100 : 0;
 
                                     return (
@@ -282,7 +291,7 @@ const PaperTradingPanel: React.FC = () => {
                                                 {new Date(trade.created_at).toLocaleDateString()}
                                             </td>
                                             <td className="py-4 px-4 font-bold text-white group-hover:text-accent transition-colors">
-                                                {trade.ticker}
+                                                {ticker}
                                             </td>
                                             <td className="py-4 px-4 font-mono text-gray-400 text-right">
                                                 ${trade.entry_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -291,9 +300,13 @@ const PaperTradingPanel: React.FC = () => {
                                                 ${investedAmt.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                             </td>
                                             <td className="py-4 px-4 font-mono text-right font-bold">
-                                                <span className="animate-pulse-slow">
-                                                    ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </span>
+                                                {currentPriceDisplay ? (
+                                                    <span className="animate-pulse-slow text-accent">
+                                                        ${currentPriceDisplay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-yellow-500/80 text-xs animate-pulse">Connecting...</span>
+                                                )}
                                             </td>
                                             <td className="py-4 px-4 font-mono text-right">
                                                 <div className="flex flex-col items-end">
