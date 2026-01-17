@@ -120,12 +120,6 @@ const PaperTradingPanel: React.FC = () => {
                 const qty = t.quantity || (t.invested_amount && t.entry_price ? t.invested_amount / t.entry_price : 1); // Fallback for legacy trades
                 const investedAmt = t.invested_amount || t.entry_price; // Legacy: price = amount (1 unit)
 
-                // Ensure we use the same cleanup logic for lookup
-                // Note: currentPrices is updated in the useEffect above which keys it by t.ticker
-                // Wait, the useEffect above uses: next[t.ticker] = live;
-                // So the keys in currentPrices map MATCH t.ticker (the raw one), but the VALUE comes from the cleaned lookup.
-                // So here, currentPrices[t.ticker] is CORRECT if the useEffect is working.
-
                 const currentPrice = currentPrices[t.ticker] || t.entry_price;
 
                 invested += investedAmt;

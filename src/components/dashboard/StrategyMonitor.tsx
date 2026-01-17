@@ -22,10 +22,26 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
     const COOLDOWN_MS = 5 * 60 * 1000; // 5 Minutes
     const positionRef = useRef<'NONE' | 'LONG'>('NONE'); // Simple internal state tracking
 
+    // Ref to access latest updateLogic across renders without re-subscribing
+    const updateLogicRef = useRef<(p: number) => void>(() => { });
+
+    // Update the ref whenever updateLogic changes (it changes on every render potentially, or when params change)
+    useEffect(() => {
+        updateLogicRef.current = updateLogic;
+    });
+
     // On Mount: Fetch history and subscribe
     useEffect(() => {
         const symbol = 'BTCUSDT'; // Default for monitor
         const timeframe = '1h'; // Default for monitor (could be dynamic)
+
+        const handlePriceUpdate = (s: string, p: number) => {
+            if (s === symbol) {
+                setPrice(p);
+                // Use the ref to call the latest version of logic with fresh params
+                updateLogicRef.current(p);
+            }
+        };
 
         const init = async () => {
             try {
@@ -36,18 +52,7 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
                 // 2. Subscribe to Live Price
                 binanceService.connect();
                 binanceService.subscribe(symbol);
-
-                const handlePriceUpdate = (s: string, p: number) => {
-                    if (s === symbol) {
-                        setPrice(p);
-                        updateLogic(p);
-                    }
-                };
-
                 binanceService.addListener(handlePriceUpdate);
-
-                // Store cleanup function
-                return () => binanceService.removeListener(handlePriceUpdate);
             } catch (e) {
                 console.error("Monitor init failed", e);
             }
@@ -56,15 +61,7 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
         init();
 
         return () => {
-            // Since init is async, the cleanup might not be returned immediately. 
-            // Ideally we refactor this, but for now sticking to simple fix.
-            // Actually, binanceService.unsubscribe(symbol) is what we had.
-            // With new logic, we better remove the listener.
-            // BUT, we can't easily access the listener created inside init() from here unless we elevate it.
-
-            // QUICK FIX: Rely on the Fact that StrategyMonitor is main component.
-            // But for correctness, let's just unsubscribe symbol. 
-            // The service modification ignores unsubscribe for now safely.
+            binanceService.removeListener(handlePriceUpdate);
             binanceService.unsubscribe(symbol);
         };
     }, []);
