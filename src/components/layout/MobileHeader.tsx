@@ -1,11 +1,27 @@
-import React from 'react';
-import { LayoutDashboard, Briefcase, Settings, FileText, FlaskConical, TrendingUp, Power } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Settings, FileText, FlaskConical, TrendingUp, TrendingDown, Power } from 'lucide-react';
 import { useStrategyStore } from '../../store/strategyStore';
+import { usePortfolioEquity } from '../../hooks/usePortfolioEquity';
 
 interface MobileHeaderProps {
     activeView: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics';
     onViewChange: (view: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
 }
+
+const EquityDisplay = () => {
+    const { totalEquity, pnl } = usePortfolioEquity();
+    const pnlPercent = totalEquity > 0 ? (pnl / (totalEquity - pnl)) * 100 : 0;
+
+    return (
+        <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 font-bold">Equity</span>
+            <span className="text-xs text-white font-mono font-bold">${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+            <span className={`text-[10px] flex items-center ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {pnl >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                {pnl >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%
+            </span>
+        </div>
+    );
+};
 
 const MobileHeader: React.FC<MobileHeaderProps> = ({ activeView, onViewChange }) => {
     const { isAutoTrading, setIsAutoTrading } = useStrategyStore();
@@ -49,14 +65,9 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({ activeView, onViewChange })
 
             {/* Row 3: Status & Switch */}
             <div className="flex justify-between items-center bg-black/20 p-2 rounded-lg border border-white/5">
-                {/* Ticker Sim */}
+                {/* Equity Sim */}
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-400 font-bold">BTC</span>
-                        <span className="text-xs text-white font-mono">$42k</span>
-                        <TrendingUp size={12} className="text-accent" />
-                    </div>
-                    <div className="h-3 w-px bg-white/10"></div>
+                    <EquityDisplay />
                 </div>
 
                 {/* Auto-Trading Switch */}

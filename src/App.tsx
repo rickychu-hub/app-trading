@@ -94,15 +94,14 @@ function App() {
 
       {activeView === 'news' ? (
         <div className="space-y-6">
-          <StrategyMonitor onExecuteTrade={async (side, price, reason) => {
+          <StrategyMonitor onExecuteTrade={async (side, price, reason, ticker) => {
             // Auto-Trade Implementation
-            const ticker = 'BTCUSDT';
             const investAmount = 1000; // Fixed demo amount
             const quantity = parseFloat(formatQuantity(investAmount / price));
 
             try {
               const { error } = await supabase.from('trades').insert([{
-                ticker,
+                ticker: ticker || 'BTCUSDT', // Use dynamic ticker
                 entry_price: price,
                 invested_amount: investAmount,
                 quantity,
