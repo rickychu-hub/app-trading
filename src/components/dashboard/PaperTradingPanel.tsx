@@ -3,6 +3,7 @@ import PortfolioStats from './PortfolioStats';
 import AssetDetailModal from './AssetDetailModal';
 import AIPortfolioInsights from './AIPortfolioInsights';
 import { Loader2, TrendingUp, TrendingDown, XCircle, AlertTriangle } from 'lucide-react';
+import { useBinancePrices } from '../../hooks/useBinancePrices';
 
 interface Trade {
     id: number;
@@ -17,7 +18,7 @@ interface Trade {
     latest_news_title?: string;
 }
 
-import { getCoingeckoId, TICKER_MAP } from '../../utils/crypto';
+// import { getCoingeckoId, TICKER_MAP } from '../../utils/crypto';
 
 const PaperTradingPanel: React.FC = () => {
     const [trades, setTrades] = useState<Trade[]>([]);
@@ -67,79 +68,37 @@ const PaperTradingPanel: React.FC = () => {
         return () => window.removeEventListener('tradeResponse', fetchTrades);
     }, []);
 
-    // Real-time Simulation Effect with CoinGecko
+    // Real-time Prices from Binance
+    const activeTickers = useMemo(() => {
+        const tickers = new Set<string>();
+        trades.forEach(t => tickers.add(t.ticker));
+        return Array.from(tickers);
+    }, [trades]);
+
+    const livePrices = useBinancePrices(activeTickers);
+
+    // Merge live prices with fallback
     useEffect(() => {
         if (trades.length === 0) return;
 
-        // Initialize prices once
         setCurrentPrices(prev => {
             const next = { ...prev };
             let changed = false;
+
             trades.forEach(t => {
-                if (!next[t.ticker]) {
+                // Priority: Live Price -> Previous Price -> Entry Price
+                const live = livePrices[t.ticker] || livePrices[`${t.ticker}USDT`];
+                if (live && live !== next[t.ticker]) {
+                    next[t.ticker] = live;
+                    changed = true;
+                } else if (!next[t.ticker]) {
                     next[t.ticker] = t.entry_price;
                     changed = true;
                 }
             });
             return changed ? next : prev;
         });
-
-        const updatePrices = async () => {
-            const tickersToFetch = new Set<string>();
-            const tickersToSimulate = new Set<string>();
-
-            trades.forEach(t => {
-                const geckoId = getCoingeckoId(t.ticker);
-                if (geckoId) {
-                    tickersToFetch.add(geckoId);
-                } else {
-                    tickersToSimulate.add(t.ticker);
-                }
-            });
-
-            let fetchedPrices: Record<string, number> = {};
-            if (tickersToFetch.size > 0) {
-                try {
-                    const ids = Array.from(tickersToFetch).join(',');
-                    const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        Object.entries(TICKER_MAP).forEach(([ticker, id]) => {
-                            if (data[id] && data[id].usd) {
-                                fetchedPrices[ticker] = data[id].usd;
-                            }
-                        });
-                    }
-                } catch (e) {
-                    console.error("CoinGecko API Error:", e);
-                    trades.forEach(t => {
-                        if (TICKER_MAP[t.ticker.toUpperCase()]) tickersToSimulate.add(t.ticker);
-                    });
-                }
-            }
-
-            setCurrentPrices(prev => {
-                const next = { ...prev };
-                Object.entries(fetchedPrices).forEach(([ticker, price]) => {
-                    next[ticker] = price;
-                });
-
-                trades.forEach(t => {
-                    if (!fetchedPrices[t.ticker]) {
-                        const current = next[t.ticker] || t.entry_price;
-                        const volatility = 0.005;
-                        const change = 1 + (Math.random() * (volatility * 2) - volatility);
-                        next[t.ticker] = current * change;
-                    }
-                });
-                return next;
-            });
-        };
-
-        updatePrices();
-        const loopInterval = setInterval(updatePrices, 30000);
-        return () => clearInterval(loopInterval);
-    }, [trades]);
+    }, [trades, livePrices]);
 
     // Calculate Portfolio Metrics
     const metrics = useMemo(() => {
