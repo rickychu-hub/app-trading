@@ -99,7 +99,7 @@ class BinancePriceService {
         }
     }
 
-    unsubscribe(symbol: string) {
+    unsubscribe(_symbol: string) {
         // With multiple listeners, we should be careful about unsubscribing.
         // For now, we'll keep the stream open if other components might need it,
         // or we could implement ref-counting. 
