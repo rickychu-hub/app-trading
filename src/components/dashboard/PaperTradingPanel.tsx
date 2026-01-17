@@ -71,7 +71,12 @@ const PaperTradingPanel: React.FC = () => {
     // Real-time Prices from Binance
     const activeTickers = useMemo(() => {
         const tickers = new Set<string>();
-        trades.forEach(t => tickers.add(t.ticker.toUpperCase()));
+        trades.forEach(t => {
+            if (t.ticker) {
+                const clean = t.ticker.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                tickers.add(clean);
+            }
+        });
         return Array.from(tickers);
     }, [trades]);
 
@@ -87,9 +92,11 @@ const PaperTradingPanel: React.FC = () => {
 
             trades.forEach(t => {
                 // Priority: Live Price -> Previous Price -> Entry Price
-                // Lookup using Uppercase because useBinancePrices normalizes to "BTC" (Base) or "BTCUSDT"
-                const tickerUpper = t.ticker.toUpperCase();
-                const live = livePrices[tickerUpper] || livePrices[`${tickerUpper}USDT`];
+                // Lookup using Uppercase and cleaned ticker
+                const rawTicker = t.ticker || '';
+                const ticker = rawTicker.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+                const live = livePrices[ticker] || livePrices[`${ticker}USDT`];
 
                 if (live && live !== next[t.ticker]) {
                     next[t.ticker] = live;
@@ -112,6 +119,13 @@ const PaperTradingPanel: React.FC = () => {
             if (t.status === 'OPEN') {
                 const qty = t.quantity || (t.invested_amount && t.entry_price ? t.invested_amount / t.entry_price : 1); // Fallback for legacy trades
                 const investedAmt = t.invested_amount || t.entry_price; // Legacy: price = amount (1 unit)
+
+                // Ensure we use the same cleanup logic for lookup
+                // Note: currentPrices is updated in the useEffect above which keys it by t.ticker
+                // Wait, the useEffect above uses: next[t.ticker] = live;
+                // So the keys in currentPrices map MATCH t.ticker (the raw one), but the VALUE comes from the cleaned lookup.
+                // So here, currentPrices[t.ticker] is CORRECT if the useEffect is working.
+
                 const currentPrice = currentPrices[t.ticker] || t.entry_price;
 
                 invested += investedAmt;
@@ -262,7 +276,9 @@ const PaperTradingPanel: React.FC = () => {
                             <tbody>
                                 {trades.map((trade) => {
                                     // Aggressive Normalization & Forced Conversion
-                                    const ticker = trade.ticker?.trim().toUpperCase();
+                                    const rawTicker = trade.ticker || '';
+                                    const ticker = rawTicker.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
                                     const rawLivePrice = livePrices[ticker] || livePrices[`${ticker}USDT`];
                                     const livePrice = rawLivePrice ? Number(rawLivePrice) : undefined;
 

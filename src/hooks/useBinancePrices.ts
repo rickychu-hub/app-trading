@@ -22,6 +22,9 @@ export const useBinancePrices = (tickers: string[]) => {
 
             const normalizedSymbol = symbol.replace('USDT', '');
 
+            // DEBUGLOG
+            // console.log(`[useBinancePrices] Update: ${symbol} = ${price}`);
+
             // Allow update if it matches one of our requested tickers (either exact match or base match)
             const isRelevant = tickers.some(t => {
                 const upperT = t.toUpperCase();
