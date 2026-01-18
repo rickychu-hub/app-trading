@@ -168,46 +168,51 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
     }, [params.isAutoTrading]);
 
     const handleManualBuy = async () => {
-        if (!onExecuteTrade) return;
-
-        const amt = Number(investmentAmount);
-        if (!amt || amt <= 0) {
-            alert("Error: Por favor, ingrese un monto de inversión válido mayor a 0.");
-            return;
-        }
-
-        if (!price || price <= 0) {
-            alert("Error: Esperando datos de precio market data...");
-            return;
-        }
-
-        setIsProcessing(true);
         try {
+            if (!onExecuteTrade) throw new Error("Función de ejecución no disponible");
+
+            const amt = Number(investmentAmount);
+            if (!amt || amt <= 0 || isNaN(amt)) {
+                throw new Error("Cantidad inválida. Ingrese un número mayor a 0.");
+            }
+
+            if (!price || price <= 0) {
+                throw new Error("Esperando datos de precio market data...");
+            }
+
+            // Input Sanitization Passed
+            setIsProcessing(true);
+
             await onExecuteTrade('BUY', price, "Manual Override", ticker, amt);
-            // We don't alert success here because the parent usually handles it or the refresh will show active state
+
+            // Explicit Success Handling
+            alert('✅ Operación Exitosa. Recargando Dashboard...');
+            window.location.reload();
+
         } catch (e: any) {
             console.error("Manual Buy Error:", e);
-            alert(`Error al ejecutar COMPRA: ${e.message || "Fallo desconocido"}`);
+            alert(`ERROR CRÍTICO: ${e.message || "Fallo desconocido"}`);
         } finally {
             setIsProcessing(false);
         }
     };
 
     const handleManualClose = async () => {
-        if (!activeTrade) return;
-        setIsProcessing(true);
-
-        // Calculate estimated P&L
-        const invested = activeTrade.invested_amount || activeTrade.entry_price || 0;
-        const qty = activeTrade.quantity || (activeTrade.entry_price > 0 ? invested / activeTrade.entry_price : 0);
-        const currentVal = price * qty;
-        const pnl = currentVal - invested;
-
-        let reason = "Manual Override";
-        // Strategy reason if called from auto
-        if (status === 'SELL') reason = "Strategy Sell Signal";
-
         try {
+            if (!activeTrade) throw new Error("No hay operación activa para cerrar");
+            if (!activeTrade.id) throw new Error("ID de operación perdido. Posible desincronización.");
+
+            setIsProcessing(true);
+
+            // Calculate estimated P&L
+            const invested = activeTrade.invested_amount || activeTrade.entry_price || 0;
+            const qty = activeTrade.quantity || (activeTrade.entry_price > 0 ? invested / activeTrade.entry_price : 0);
+            const currentVal = price * qty;
+            const pnl = currentVal - invested;
+
+            let reason = "Manual Override";
+            if (status === 'SELL') reason = "Strategy Sell Signal";
+
             const payload = {
                 exit_price: price,
                 final_pnl: pnl,
@@ -221,14 +226,16 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
             });
 
             if (response.ok) {
-                if (onRefresh) onRefresh();
+                alert('✅ Venta Exitosa. Recargando...');
+                window.location.reload();
             } else {
                 const err = await response.json();
                 throw new Error(err.message || "Error en el servidor al cerrar");
             }
+
         } catch (e: any) {
             console.error("Manual Close Error:", e);
-            alert(`Error al ejecutar VENTA: ${e.message}`);
+            alert(`ERROR CRÍTICO AL VENDER: ${e.message}`);
         } finally {
             setIsProcessing(false);
         }

@@ -125,9 +125,12 @@ function App() {
                 });
 
                 console.log("Auto-trade executed successfully");
+              } else {
+                throw new Error(error.message);
               }
-            } catch (err) {
+            } catch (err: any) {
               console.error("Auto-trade failed", err);
+              throw err;
             }
           }} />
           <MarketScannerPanel />

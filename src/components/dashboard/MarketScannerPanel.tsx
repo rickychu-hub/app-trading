@@ -13,7 +13,11 @@ interface MarketOpportunity {
     rsi: number;
 }
 
-const TOP_ASSETS = ['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'DOGE', 'XRP', 'DOT', 'LINK', 'AVAX'];
+const TOP_ASSETS = [
+    'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'AVAX', 'SHIB', 'DOT',
+    'LINK', 'TRX', 'MATIC', 'BCH', 'NEAR', 'UNI', 'LTC', 'APT', 'ICP', 'RNDR',
+    'HBAR', 'FIL', 'ATOM', 'ARB', 'STX', 'IMX', 'KAS', 'VET', 'XLM', 'INJ'
+];
 
 const MarketScannerPanel: React.FC = () => {
     const [opportunities, setOpportunities] = useState<MarketOpportunity[]>([]);
