@@ -4,6 +4,8 @@ import AssetDetailModal from './AssetDetailModal';
 import AIPortfolioInsights from './AIPortfolioInsights';
 import { Loader2, TrendingUp, TrendingDown, XCircle, AlertTriangle } from 'lucide-react';
 import { useBinancePrices } from '../../hooks/useBinancePrices';
+import { binanceService } from '../../services/binancePriceService';
+import { analysisService } from '../../services/analysisService';
 
 interface Trade {
     id: number;
@@ -176,70 +178,70 @@ const PaperTradingPanel: React.FC = () => {
         return { invested, current };
     }, [trades, currentPrices]);
 
-    const [algoSignals, setAlgoSignals] = useState<Record<number, { signal: string, score: number, reason: string }>>({});
+    const [technicalSignals, setTechnicalSignals] = useState<Record<number, { signal: string, color: string }>>({});
 
-    // Fetch News for AI Analysis
+    // Unified Analysis: Technicals (Strategy) + Fundamentals (News)
     useEffect(() => {
-        const analyzeHoldings = async () => {
-            if (trades.length === 0) return;
+        const runAnalysis = async () => {
+            if (activeTab !== 'active' || trades.length === 0) return;
 
-            try {
-                const res = await fetch('/api/news');
-                if (!res.ok) return;
-                const newsItems: any[] = await res.json();
+            const newSignals: Record<number, { signal: string, color: string }> = {};
 
-                const newSignals: Record<number, { signal: string, score: number, reason: string }> = {};
-                const now = new Date();
-                const oneDayMs = 24 * 60 * 60 * 1000;
+            // We need to fetch candles for technical analysis
+            // Optimization: We could cache this or use a store, but for now we fetch fresh.
+            for (const trade of trades) {
+                if (trade.status !== 'OPEN') continue;
 
-                trades.forEach(trade => {
-                    // Filter news for this ticker (< 24h)
-                    const relevantNews = newsItems.filter(n => {
-                        const newsDate = new Date(n.created_at || n.fecha || new Date());
-                        const isRecent = (now.getTime() - newsDate.getTime()) < oneDayMs;
-                        // Match ticker in tickers array or title/summary text
-                        const referencesTicker = (n.tickers && n.tickers.includes(trade.ticker)) ||
-                            (n.title && n.title.toUpperCase().includes(trade.ticker)) ||
-                            (n.resumen && n.resumen.toUpperCase().includes(trade.ticker));
-                        return isRecent && referencesTicker;
-                    });
+                // 1. Technical Analysis (Priority)
+                try {
+                    const rawTicker = trade.ticker.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                    const pair = `${rawTicker}USDT`;
+                    const candles = await binanceService.fetchHistoricalCandles(pair, '1h', 50); // Same timeframe as Strategy
 
-                    // Sort by date desc (just in case)
-                    relevantNews.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-                    const recent3 = relevantNews.slice(0, 3);
+                    if (candles.length > 0) {
+                        const data = candles;
+                        const i = data.length - 1;
 
-                    if (recent3.length > 0) {
-                        const avgScore = recent3.reduce((acc, curr) => acc + (curr.score || curr.sentiment_score || 0), 0) / recent3.length;
+                        // Indicators (Same Params as Default Strategy)
+                        const rsiSeries = analysisService.generateRSISeries(data, 14);
+                        const fastSeries = analysisService.generateEMASeries(data, 9);
+                        const slowSeries = analysisService.generateEMASeries(data, 21);
 
-                        let signal = "NEUTRAL";
-                        let reason = "Sin cambios fundamentales.";
+                        const rsi = rsiSeries[i] || 0;
+                        const emaFast = fastSeries[i] || 0;
+                        const emaSlow = slowSeries[i] || 0;
 
-                        if (avgScore > 0.3) { // Lower threshold for testing
-                            signal = "MANTENER 🟢";
-                            reason = "Tendencia positiva en noticias recientes.";
-                        } else if (avgScore < -0.2) {
-                            signal = "VENTA SUGERIDA 🔴";
-                            reason = "Noticias negativas recientes detectadas.";
+                        // Logic Mirroring StrategyUnit
+                        if (emaFast > emaSlow && rsi > 50) {
+                            newSignals[trade.id] = {
+                                signal: "MANTENER (Fuerte)",
+                                color: "text-green-400"
+                            };
+                        } else if (emaFast < emaSlow) {
+                            newSignals[trade.id] = {
+                                signal: "VENTA SUGERIDA",
+                                color: "text-red-400 font-bold animate-pulse"
+                            };
+                        } else {
+                            newSignals[trade.id] = {
+                                signal: "MANTENER",
+                                color: "text-gray-400"
+                            };
                         }
-
-                        newSignals[trade.id] = { signal, score: avgScore, reason };
-                    } else {
-                        newSignals[trade.id] = { signal: "NEUTRAL ⚪", score: 0, reason: "Sin noticias recientes." };
                     }
-                });
-
-                setAlgoSignals(newSignals);
-
-            } catch (e) {
-                console.error("AI Analysis Failed:", e);
+                } catch (e) {
+                    console.error(`Error analyzing ${trade.ticker}`, e);
+                    newSignals[trade.id] = { signal: "Check Manual", color: "text-yellow-500" };
+                }
             }
+            setTechnicalSignals(newSignals);
         };
 
-        analyzeHoldings();
-    }, [trades]); // Re-run when trades change
+        runAnalysis();
+    }, [trades, activeTab]);
 
     const getSignal = (trade: Trade, pnlPercent: number) => {
-        // 1. Take Profit / Stop Loss (Hard Rules) override AI
+        // 1. Hard Stops (Highest Priority)
         if (pnlPercent > 10) {
             return (
                 <span className="flex items-center gap-1 text-green-400 font-bold bg-green-400/10 px-2 py-1 rounded animate-pulse">
@@ -254,28 +256,19 @@ const PaperTradingPanel: React.FC = () => {
             );
         }
 
-        // 2. AI Analysis Signal
-        const aiAnalysis = algoSignals[trade.id];
-        if (aiAnalysis) {
-            if (aiAnalysis.signal.includes("VENTA")) {
-                return <span className="text-red-400 font-bold flex items-center gap-1"><TrendingDown size={14} /> {aiAnalysis.signal}</span>;
-            }
-            if (aiAnalysis.signal.includes("MANTENER")) {
-                return <span className="text-green-400 font-bold flex items-center gap-1"><TrendingUp size={14} /> {aiAnalysis.signal}</span>;
-            }
-            return <span className="text-gray-400 text-xs">{aiAnalysis.signal}</span>;
+        // 2. Technical Strategy Signal
+        const tech = technicalSignals[trade.id];
+        if (tech) {
+            return (
+                <span className={`flex items-center gap-1 ${tech.color}`}>
+                    {tech.signal.includes("VENTA") ? <TrendingDown size={14} /> : <TrendingUp size={14} />}
+                    {tech.signal}
+                </span>
+            );
         }
 
-        // 3. Fallback to existing logic if analysis not ready
-        if (trade.latest_sentiment_score !== undefined) {
-            if (trade.latest_sentiment_score <= -0.4) {
-                return <span className="text-red-400 flex items-center gap-1"><TrendingDown size={14} /> BEARISH AI</span>;
-            } else if (trade.latest_sentiment_score >= 0.4) {
-                return <span className="text-green-400 flex items-center gap-1"><TrendingUp size={14} /> BULLISH AI</span>;
-            }
-        }
-
-        return <span className="text-gray-400 text-xs">MANTENER</span>;
+        // 3. Fallback
+        return <span className="text-gray-500 text-xs">Calculando...</span>;
     };
 
     return (

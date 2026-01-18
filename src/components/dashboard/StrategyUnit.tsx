@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { ArrowUp, ArrowDown, Minus, X } from 'lucide-react';
 import { useStrategyStore } from '../../store/strategyStore';
@@ -9,7 +10,7 @@ import { type Candle } from '../../services/backtestEngine';
 interface StrategyUnitProps {
     ticker: string;
     activeTrade?: any;
-    onExecuteTrade?: (side: 'BUY' | 'SELL', price: number, reason: string, ticker: string, amount: number) => void;
+    onExecuteTrade?: (side: 'BUY' | 'SELL', price: number, reason: string, ticker: string, amount: number) => Promise<void>;
     onRefresh?: () => void;
 }
 
@@ -22,7 +23,7 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
     const [status, setStatus] = useState<'NEUTRAL' | 'BUY' | 'SELL' | 'WAITING'>('WAITING');
     const [indicators, setIndicators] = useState<{ rsi: number, emaFast: number, emaSlow: number } | null>(null);
     const [investmentAmount, setInvestmentAmount] = useState<string>("1000");
-    const [isClosing, setIsClosing] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const candlesRef = useRef<Candle[]>([]);
 
@@ -166,19 +167,35 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
         }
     }, [params.isAutoTrading]);
 
-    const handleManualBuy = () => {
+    const handleManualBuy = async () => {
         if (!onExecuteTrade) return;
+
         const amt = Number(investmentAmount);
-        if (amt <= 0) {
-            alert("Ingrese un monto válido");
+        if (!amt || amt <= 0) {
+            alert("Error: Por favor, ingrese un monto de inversión válido mayor a 0.");
             return;
         }
-        onExecuteTrade('BUY', price, "Manual Override", ticker, amt);
+
+        if (!price || price <= 0) {
+            alert("Error: Esperando datos de precio market data...");
+            return;
+        }
+
+        setIsProcessing(true);
+        try {
+            await onExecuteTrade('BUY', price, "Manual Override", ticker, amt);
+            // We don't alert success here because the parent usually handles it or the refresh will show active state
+        } catch (e: any) {
+            console.error("Manual Buy Error:", e);
+            alert(`Error al ejecutar COMPRA: ${e.message || "Fallo desconocido"}`);
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const handleManualClose = async () => {
         if (!activeTrade) return;
-        setIsClosing(true);
+        setIsProcessing(true);
 
         // Calculate estimated P&L
         const invested = activeTrade.invested_amount || activeTrade.entry_price || 0;
@@ -206,12 +223,14 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
             if (response.ok) {
                 if (onRefresh) onRefresh();
             } else {
-                console.error("Failed to close trade");
+                const err = await response.json();
+                throw new Error(err.message || "Error en el servidor al cerrar");
             }
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            console.error("Manual Close Error:", e);
+            alert(`Error al ejecutar VENTA: ${e.message}`);
         } finally {
-            setIsClosing(false);
+            setIsProcessing(false);
         }
     };
 
@@ -285,17 +304,17 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
                 <div className="grid grid-cols-2 gap-2">
                     <button
                         onClick={handleManualBuy}
-                        disabled={!!activeTrade || !price}
+                        disabled={!!activeTrade || !price || isProcessing}
                         className="bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded py-1.5 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                        COMPRAR AHORA
+                        {isProcessing && !activeTrade ? 'PROCESANDO...' : 'COMPRAR AHORA'}
                     </button>
                     <button
                         onClick={handleManualClose}
-                        disabled={!activeTrade || isClosing}
+                        disabled={!activeTrade || isProcessing}
                         className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 rounded py-1.5 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                     >
-                        {isClosing ? 'VENDIENDO...' : 'VENDER AHORA'}
+                        {isProcessing && activeTrade ? 'PROCESANDO...' : 'VENDER AHORA'}
                     </button>
                 </div>
             </div>
