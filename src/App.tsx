@@ -9,11 +9,12 @@ import { supabase } from './lib/supabaseClient';
 import { notificationService } from './services/notificationService';
 import AnalyticsPanel from './components/dashboard/AnalyticsPanel';
 import StrategyMonitor from './components/dashboard/StrategyMonitor';
+import MarketScannerPanel from './components/dashboard/MarketScannerPanel';
 import type { NewsItem } from './data/mockData';
 import { formatQuantity } from './utils/tradeUtils';
 
 function App() {
-  const [activeView, setActiveView] = useState<'news' | 'portfolio' | 'journal' | 'settings' | 'analytics'>('news');
+  const [activeView, setActiveView] = useState<'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics'>('news');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
@@ -74,21 +75,24 @@ function App() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
           {activeView === 'news' ? 'Dashboard General' :
-            activeView === 'portfolio' ? 'Portfolio Simulado' :
-              activeView === 'journal' ? 'Diario de Trading Inteligente' :
-                activeView === 'analytics' ? 'Backtesting & Analytics' :
-                  'Configuración'}
+            activeView === 'market' ? 'Noticias e Inteligencia' :
+              activeView === 'portfolio' ? 'Portfolio Simulado' :
+                activeView === 'journal' ? 'Diario de Trading Inteligente' :
+                  activeView === 'analytics' ? 'Backtesting & Analytics' :
+                    'Configuración'}
         </h2>
         <p className="text-gray-400">
           {activeView === 'news'
             ? 'Bienvenido a su centro de inteligencia financiera.'
-            : activeView === 'portfolio'
-              ? 'Gestión y seguimiento de operaciones simuladas.'
-              : activeView === 'journal'
-                ? 'Análisis automatizado de sus operaciones pasadas.'
-                : activeView === 'analytics'
-                  ? 'Laboratorio de validación de estrategias históricas.'
-                  : 'Gestión de parámetros y preferencias.'}
+            : activeView === 'market'
+              ? 'Análisis fundamental y noticias en tiempo real.'
+              : activeView === 'portfolio'
+                ? 'Gestión y seguimiento de operaciones simuladas.'
+                : activeView === 'journal'
+                  ? 'Análisis automatizado de sus operaciones pasadas.'
+                  : activeView === 'analytics'
+                    ? 'Laboratorio de validación de estrategias históricas.'
+                    : 'Gestión de parámetros y preferencias.'}
         </p>
       </div>
 
@@ -126,8 +130,10 @@ function App() {
               console.error("Auto-trade failed", err);
             }
           }} />
-          <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
+          <MarketScannerPanel />
         </div>
+      ) : activeView === 'market' ? (
+        <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
       ) : activeView === 'portfolio' ? (
         <PaperTradingPanel />
       ) : activeView === 'journal' ? (

@@ -1,14 +1,15 @@
 import React from 'react';
-import { LayoutDashboard, Briefcase, Settings, FileText, FlaskConical } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Settings, FileText, FlaskConical, Newspaper } from 'lucide-react';
 
 interface SidebarProps {
-    activeView: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics';
-    onViewChange: (view: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
+    activeView: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics';
+    onViewChange: (view: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
     const navItems = [
         { icon: LayoutDashboard, label: "Dashboard", id: 'news', active: activeView === 'news' },
+        { icon: Newspaper, label: "Mercado", id: 'market', active: activeView === 'market' },
         { icon: Briefcase, label: "Portfolio", id: 'portfolio', active: activeView === 'portfolio' },
         { icon: FlaskConical, label: "Analytics", id: 'analytics', active: activeView === 'analytics' },
         { icon: FileText, label: "Diario", id: 'journal', active: activeView === 'journal' },

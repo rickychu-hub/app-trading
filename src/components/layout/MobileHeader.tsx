@@ -1,10 +1,10 @@
-import { LayoutDashboard, Briefcase, Settings, FileText, FlaskConical, TrendingUp, TrendingDown, Power } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Settings, FileText, FlaskConical, TrendingUp, TrendingDown, Power, Newspaper } from 'lucide-react';
 import { useStrategyStore } from '../../store/strategyStore';
 import { usePortfolioEquity } from '../../hooks/usePortfolioEquity';
 
 interface MobileHeaderProps {
-    activeView: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics';
-    onViewChange: (view: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
+    activeView: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics';
+    onViewChange: (view: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
 }
 
 const EquityDisplay = () => {
@@ -28,6 +28,7 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({ activeView, onViewChange })
 
     const navItems = [
         { icon: LayoutDashboard, label: "Dash", id: 'news', active: activeView === 'news' },
+        { icon: Newspaper, label: "Market", id: 'market', active: activeView === 'market' },
         { icon: Briefcase, label: "Portf", id: 'portfolio', active: activeView === 'portfolio' },
         { icon: FlaskConical, label: "Lab", id: 'analytics', active: activeView === 'analytics' },
         { icon: FileText, label: "Diario", id: 'journal', active: activeView === 'journal' },

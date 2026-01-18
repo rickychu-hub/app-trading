@@ -6,8 +6,8 @@ import MobileHeader from './MobileHeader';
 
 interface LayoutProps {
     children: React.ReactNode;
-    activeView: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics';
-    onViewChange: (view: 'news' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
+    activeView: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics';
+    onViewChange: (view: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange }) => {
