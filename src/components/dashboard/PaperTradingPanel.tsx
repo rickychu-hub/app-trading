@@ -16,6 +16,11 @@ interface Trade {
     status: string;
     latest_sentiment_score?: number;
     latest_news_title?: string;
+    // Closed trade fields
+    exit_price?: number;
+    final_pnl?: number;
+    close_reason?: string;
+    exit_time?: string;
 }
 
 // import { getCoingeckoId, TICKER_MAP } from '../../utils/crypto';
@@ -23,6 +28,7 @@ interface Trade {
 const PaperTradingPanel: React.FC = () => {
     const [trades, setTrades] = useState<Trade[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
     const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
     const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
     const [isChartOpen, setIsChartOpen] = useState(false);
@@ -30,7 +36,8 @@ const PaperTradingPanel: React.FC = () => {
     const fetchTrades = async () => {
         setLoading(true);
         try {
-            const response = await fetch("/api/trades");
+            const status = activeTab === 'active' ? 'OPEN' : 'CLOSED';
+            const response = await fetch(`/api/trades?status=${status}`);
             if (response.ok) {
                 const data = await response.json();
                 setTrades(data);
@@ -42,11 +49,50 @@ const PaperTradingPanel: React.FC = () => {
         }
     };
 
-    const handleCloseTrade = async (e: React.MouseEvent, id: number) => {
+    // Re-fetch when tab changes
+    useEffect(() => {
+        fetchTrades();
+    }, [activeTab]);
+
+    const handleCloseTrade = async (e: React.MouseEvent, trade: Trade) => {
         e.stopPropagation();
-        if (!confirm("¿Cerrar esta operación?")) return;
+
+        // Calculate P&L for closing
+        const rawTicker = trade.ticker || '';
+        const ticker = rawTicker.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+        const livePrice = livePrices[ticker] || livePrices[`${ticker}USDT`];
+
+        if (!livePrice) {
+            alert("No hay precio actual disponible para cerrar la operación.");
+            return;
+        }
+
+        const investedAmt = trade.invested_amount || trade.entry_price;
+        const qty = trade.quantity || (trade.entry_price > 0 ? investedAmt / trade.entry_price : 0);
+        const currentValue = livePrice * qty;
+        const pnl = currentValue - investedAmt;
+        const pnlPercent = (pnl / investedAmt) * 100;
+
+        // Reason Logic
+        let reason = "Manual Close";
+        if (pnlPercent > 10) reason = "Take Profit";
+        else if (pnlPercent < -5) reason = "Stop Loss";
+
+        if (!confirm(`¿Cerrar operación en ${ticker}?\n\nP&L Estimado: $${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`)) return;
+
         try {
-            const response = await fetch(`/api/trades/${id}/close`, { method: 'PUT' });
+            const payload = {
+                exit_price: Number(livePrice),
+                final_pnl: Number(pnl),
+                reason: reason
+            };
+
+            const response = await fetch(`/api/trades/${trade.id}/close`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
             if (response.ok) {
                 fetchTrades();
             } else {
@@ -63,7 +109,7 @@ const PaperTradingPanel: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchTrades();
+        // Initial fetch handled by tab effect usually, but we want to listen to events
         window.addEventListener('tradeResponse', fetchTrades);
         return () => window.removeEventListener('tradeResponse', fetchTrades);
     }, []);
@@ -242,17 +288,37 @@ const PaperTradingPanel: React.FC = () => {
             <AIPortfolioInsights trades={trades} currentPrices={currentPrices} />
 
             <div className="glass-panel rounded-2xl p-8 border border-white/10">
-                <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-                    Operaciones Activas <span className="text-xs bg-white/10 px-2 py-1 rounded font-normal text-gray-400">Live Simulation</span>
-                </h2>
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                        {activeTab === 'active' ? 'Operaciones Activas' : 'Historial de Operaciones'}
+                        <span className="text-xs bg-white/10 px-2 py-1 rounded font-normal text-gray-400">Live Simulation</span>
+                    </h2>
+
+                    <div className="flex bg-black/40 rounded-lg p-1 border border-white/5">
+                        <button
+                            onClick={() => setActiveTab('active')}
+                            className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'active' ? 'bg-accent text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            Activas
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'history' ? 'bg-accent text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            Historial
+                        </button>
+                    </div>
+                </div>
 
                 {loading ? (
                     <div className="flex justify-center p-8">
                         <Loader2 className="animate-spin text-accent" />
                     </div>
                 ) : trades.length === 0 ? (
-                    <p className="text-gray-400 text-center py-8">No hay operaciones activas. Ve al Dashboard para simular una.</p>
-                ) : (
+                    <p className="text-gray-400 text-center py-8">
+                        {activeTab === 'active' ? "No hay operaciones activas." : "No hay historial disponible."}
+                    </p>
+                ) : activeTab === 'active' ? (
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -335,12 +401,62 @@ const PaperTradingPanel: React.FC = () => {
                                             </td>
                                             <td className="py-4 px-4 text-right">
                                                 <button
-                                                    onClick={(e) => handleCloseTrade(e, trade.id)}
+                                                    onClick={(e) => handleCloseTrade(e, trade)}
                                                     className="text-gray-400 hover:text-red-400 transition-colors p-2 hover:bg-red-500/10 rounded-lg group-hover:opacity-100 opacity-50"
                                                     title="Cerrar Operación"
                                                 >
                                                     <XCircle size={18} />
                                                 </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    // HISTORY TABLE
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="text-gray-400 border-b border-white/10 text-xs uppercase tracking-wider">
+                                    <th className="py-4 px-4">Fecha Venta</th>
+                                    <th className="py-4 px-4">Ticker</th>
+                                    <th className="py-4 px-4 text-right">Entrada</th>
+                                    <th className="py-4 px-4 text-right">Salida</th>
+                                    <th className="py-4 px-4 text-right">P&L Final</th>
+                                    <th className="py-4 px-4 text-right">Razón</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {trades.map((trade) => {
+                                    const pnl = trade.final_pnl || 0;
+                                    const colorClass = pnl >= 0 ? 'text-green-400' : 'text-red-400';
+
+                                    return (
+                                        <tr key={trade.id} className="text-gray-300 border-b border-white/5 hover:bg-white/5 transition-colors">
+                                            <td className="py-4 px-4 text-sm text-gray-400">
+                                                {trade.exit_time ? new Date(trade.exit_time).toLocaleDateString() : '-'}
+                                                <span className="block text-xs opacity-50">
+                                                    {trade.exit_time ? new Date(trade.exit_time).toLocaleTimeString() : ''}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-4 font-bold text-white">
+                                                {trade.ticker}
+                                            </td>
+                                            <td className="py-4 px-4 font-mono text-right text-gray-400">
+                                                ${trade.entry_price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="py-4 px-4 font-mono text-right text-white">
+                                                ${trade.exit_price?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '-'}
+                                            </td>
+                                            <td className={`py-4 px-4 font-mono text-right font-bold ${colorClass}`}>
+                                                {pnl >= 0 ? '+' : ''}${pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="py-4 px-4 text-right text-sm">
+                                                <span className={`px-2 py-1 rounded text-xs border ${pnl >= 0 ? 'border-green-500/30 text-green-300 bg-green-500/10' : 'border-red-500/30 text-red-300 bg-red-500/10'}`}>
+                                                    {trade.close_reason || 'Manual'}
+                                                </span>
                                             </td>
                                         </tr>
                                     );
@@ -356,7 +472,7 @@ const PaperTradingPanel: React.FC = () => {
                 isOpen={isChartOpen}
                 onClose={() => setIsChartOpen(false)}
             />
-        </div>
+        </div >
     );
 };
 

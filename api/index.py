@@ -281,6 +281,11 @@ class PaperTrade(BaseModel):
     initial_score: Optional[float] = None
     status: str = "OPEN"
 
+class TradeCloseRequest(BaseModel):
+    exit_price: float
+    final_pnl: float
+    reason: str
+
 # Helper functions for Paper Trades
 async def save_trade(data: dict) -> bool:
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -303,11 +308,11 @@ async def save_trade(data: dict) -> bool:
             print(f"Error saving trade: {e}")
             return False
 
-async def fetch_trades() -> List[dict]:
+async def fetch_trades(status: str = "OPEN") -> List[dict]:
     if not SUPABASE_URL or not SUPABASE_KEY:
         return []
         
-    url = f"{SUPABASE_URL}/rest/v1/paper_trades?select=*&status=eq.OPEN&order=created_at.desc"
+    url = f"{SUPABASE_URL}/rest/v1/paper_trades?select=*&status=eq.{status}&order=created_at.desc"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -315,49 +320,29 @@ async def fetch_trades() -> List[dict]:
     
     async with httpx.AsyncClient() as client:
         try:
-            # 1. Fetch Open Trades
+            # 1. Fetch Trades by Status
             response = await client.get(url, headers=headers)
             response.raise_for_status()
             trades = response.json()
             
-            # 2. Enrich with Latest Sentiment
-            # Optimization: could use a complex query, but loop is safer for now
-            for trade in trades:
-                ticker = trade.get('ticker')
-                if ticker:
-                    # Search for latest news with this ticker (naive search in 'tickers' array or title)
-                    # Using textSearch or ilike on Supabase might be better, or filter logic
-                    # We will try to find news where 'tickers' contains the ticker
-                    # Note: Supabase REST filtering array columns can be tricky.
-                    # Fallback: simple text search on the whole row or just 'empresas' logic if simpler.
-                    # Let's try to fetch just the ONE latest news item that *contains* the ticker text key
-                    
-                    # We use a broad search for robust matching:
-                    # 'cs' means contains (for array), but for text use 'ilike'
-                    # We'll use a specific query for this trade
-                    news_url = f"{SUPABASE_URL}/rest/v1/news?select=sentiment_score,titulo&order=created_at.desc&limit=1"
-                    # We have to filter manually possibly or use 'or' logic if we can't do complex filters easily here
-                    # For simplicity/reliability in this restricted context:
-                    # We'll rely on the frontend or a broader fetch. 
-                    # BUT user asked for backend logic.
-                    # Let's try searching 'empresas' column for the ticker via 'cs' (contains)
-                    # syntax: empresas=cs.{ticker}
-                    
-                    news_query = f"{news_url}&empresas=cs.{{ {ticker} }}" 
-                    
-                    try:
-                        news_resp = await client.get(news_query, headers=headers)
-                        if news_resp.is_error:
-                             # Fallback: try filter by raw text if array filter fails
-                             pass
-                        else:
-                            news_items = news_resp.json()
-                            if news_items:
-                                latest = news_items[0]
-                                trade['latest_sentiment_score'] = latest.get('sentiment_score')
-                                trade['latest_news_title'] = latest.get('titulo')
-                    except:
-                        pass
+            # 2. Enrich with Latest Sentiment (Only for OPEN trades usually, but keeping for all is fine)
+            if status == "OPEN":
+                for trade in trades:
+                    ticker = trade.get('ticker')
+                    if ticker:
+                        news_url = f"{SUPABASE_URL}/rest/v1/news?select=sentiment_score,titulo&order=created_at.desc&limit=1"
+                        news_query = f"{news_url}&empresas=cs.{{ {ticker} }}" 
+                        
+                        try:
+                            news_resp = await client.get(news_query, headers=headers)
+                            if not news_resp.is_error:
+                                news_items = news_resp.json()
+                                if news_items:
+                                    latest = news_items[0]
+                                    trade['latest_sentiment_score'] = latest.get('sentiment_score')
+                                    trade['latest_news_title'] = latest.get('titulo')
+                        except:
+                            pass
                         
             return trades
         except Exception as e:
@@ -373,7 +358,7 @@ async def create_trade(trade: PaperTrade):
     return {"status": "error"}
 
 @app.put("/trades/{trade_id}/close")
-async def close_trade(trade_id: int):
+async def close_trade(trade_id: int, close_data: TradeCloseRequest):
     if not SUPABASE_URL or not SUPABASE_KEY:
         return {"status": "error", "message": "No credentials"}
 
@@ -385,10 +370,19 @@ async def close_trade(trade_id: int):
         "Prefer": "return=minimal"
     }
     
+    # Payload
+    update_data = {
+        "status": "CLOSED",
+        "exit_price": close_data.exit_price,
+        "final_pnl": close_data.final_pnl,
+        "close_reason": close_data.reason,
+        "exit_time": "now()" # Supabase will handle this if valid timestamp, else defaults
+    }
+    
     async with httpx.AsyncClient() as client:
         try:
-            # Update status to CLOSED
-            response = await client.patch(url, json={"status": "CLOSED"}, headers=headers)
+            # Update status and exit details
+            response = await client.patch(url, json=update_data, headers=headers)
             response.raise_for_status()
             return {"status": "success"}
         except Exception as e:
@@ -396,8 +390,8 @@ async def close_trade(trade_id: int):
             return {"status": "error", "message": str(e)}
 
 @app.get("/trades")
-async def get_trades():
-    return await fetch_trades()
+async def get_trades(status: str = "OPEN"):
+    return await fetch_trades(status)
 
 if __name__ == "__main__":
     import uvicorn

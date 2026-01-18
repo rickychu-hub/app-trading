@@ -94,22 +94,21 @@ function App() {
 
       {activeView === 'news' ? (
         <div className="space-y-6">
-          <StrategyMonitor onExecuteTrade={async (side, price, reason, ticker) => {
+          <StrategyMonitor onExecuteTrade={async (side, price, reason, ticker, amount) => {
             // Auto-Trade Implementation
-            const investAmount = 1000; // Fixed demo amount
+            const investAmount = amount || 1000; // Use input amount or fallback
+            // const quantity .... (rest is same, but I need to recalc quantity)
             const quantity = parseFloat(formatQuantity(investAmount / price));
 
             try {
               const { error } = await supabase.from('trades').insert([{
-                ticker: ticker || 'BTCUSDT', // Use dynamic ticker
+                ticker: ticker || 'BTCUSDT',
                 entry_price: price,
                 invested_amount: investAmount,
                 quantity,
-                news_id: 'AUTO_' + Date.now(), // Synthetic ID
+                news_id: 'AUTO_' + Date.now(),
                 initial_score: 0,
                 status: 'OPEN',
-                // We might want to store 'side' or 'strategy' in metadata if DB supported it, 
-                // but for now we fit the existing schema.
               }]);
 
               if (!error) {
@@ -120,7 +119,7 @@ function App() {
                   size: investAmount,
                   message: `BOT: ${side} Executed @ $${price} (${reason})`
                 });
-                // Optional: Flash UI or simple log
+
                 console.log("Auto-trade executed successfully");
               }
             } catch (err) {
