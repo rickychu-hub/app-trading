@@ -186,8 +186,8 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
             await onExecuteTrade('BUY', price, "Manual Override", ticker, amt);
 
             // Explicit Success Handling
-            alert('✅ Operación Exitosa. Recargando Dashboard...');
-            window.location.reload();
+            alert('✅ Operación Exitosa. Actualizando...');
+            if (onRefresh) onRefresh();
 
         } catch (e: any) {
             console.error("Manual Buy Error:", e);
@@ -226,8 +226,8 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
             });
 
             if (response.ok) {
-                alert('✅ Venta Exitosa. Recargando...');
-                window.location.reload();
+                alert('✅ Venta Exitosa. Actualizando...');
+                if (onRefresh) onRefresh();
             } else {
                 const err = await response.json();
                 throw new Error(err.message || "Error en el servidor al cerrar");
