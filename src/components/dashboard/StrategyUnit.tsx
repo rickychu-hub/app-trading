@@ -271,9 +271,13 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
                         {ticker} <span className="text-xs text-gray-500 font-normal">1h</span>
                     </h4>
                     <p className="text-lg font-mono font-bold text-accent">
-                        ${price < 1
-                            ? price.toFixed(6)
-                            : price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {(() => {
+                            const safe = (price === null || price === undefined || isNaN(price)) ? 0 : price;
+                            if (safe === 0) return <span className="opacity-50">$0.00</span>;
+                            return `$${safe < 1
+                                ? safe.toFixed(6)
+                                : safe.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                        })()}
                     </p>
                 </div>
 
