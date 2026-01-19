@@ -79,17 +79,17 @@ function calculateIndicators(candles: Candle[]) {
 // --- Trading Logic ---
 
 async function executeTrade(ticker: string, price: number, amount: number) {
+    if (!price || price <= 0) return;
     // 1. Check if we already have an open trade for this user/bot
     const cleanTicker = ticker.replace('USDT', '');
 
-    const { data: existing } = await supabase
+    const { data: existingTrades } = await supabase
         .from('paper_trades')
         .select('id')
         .eq('ticker', cleanTicker)
-        .eq('status', 'OPEN')
-        .single();
+        .eq('status', 'OPEN');
 
-    if (existing) {
+    if (existingTrades && existingTrades.length > 0) {
         console.log(`⏸️  Skipping ${cleanTicker}: Position already open.`);
         return;
     }
