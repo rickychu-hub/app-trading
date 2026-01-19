@@ -33,20 +33,26 @@ const BotActivityPanel: React.FC = () => {
                             <span className="font-bold text-white w-16">{log.ticker}</span>
 
                             <div className="flex-1 flex items-center gap-4">
-                                <span className="text-gray-400">RSI: <span className="text-white">{log.rsi.toFixed(1)}</span></span>
+                                {/* Humanized Message Container */}
+                                <span className="text-gray-300 font-medium text-xs flex-1">
+                                    {log.decision === 'BUY' ? (
+                                        <span className="text-green-400">🚀 ¡Oportunidad! {log.ticker} muestra fuerza de compra.</span>
+                                    ) : log.decision === 'SELL' ? (
+                                        <span className="text-red-400">💰 Cerrando {log.ticker}. Asegurando beneficios.</span>
+                                    ) : log.rsi > 65 ? (
+                                        <span>👀 {log.ticker} está caliente (RSI Alto). Atento...</span>
+                                    ) : log.rsi < 35 ? (
+                                        <span>💎 {log.ticker} en zona de rebote. Buscando entrada...</span>
+                                    ) : (
+                                        <span className="opacity-70">🤖 Escaneando {log.ticker}... Mercado tranquilo.</span>
+                                    )}
+                                </span>
 
                                 <span className={`flex items-center gap-1 font-bold ${log.decision === 'BUY' ? 'text-green-400' :
                                     log.decision === 'SELL' ? 'text-red-400' :
-                                        'text-gray-400'
+                                        'text-gray-500'
                                     }`}>
-                                    {log.decision === 'BUY' && <CheckCircle size={10} />}
-                                    {log.decision === 'SELL' && <XCircle size={10} />}
-                                    {log.decision === 'WAIT' && <PauseCircle size={10} />}
                                     {log.decision}
-                                </span>
-
-                                <span className="text-gray-500 truncate max-w-[200px]" title={log.reason}>
-                                    {log.reason}
                                 </span>
                             </div>
                         </div>

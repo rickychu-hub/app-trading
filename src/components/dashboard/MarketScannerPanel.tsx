@@ -19,9 +19,14 @@ const TOP_ASSETS = [
     'HBAR', 'FIL', 'ATOM', 'ARB', 'STX', 'IMX', 'KAS', 'VET', 'XLM', 'INJ'
 ];
 
-const MarketScannerPanel: React.FC = () => {
+interface MarketScannerProps {
+    onAutoBuy?: (ticker: string, price: number) => void;
+}
+
+const MarketScannerPanel: React.FC<MarketScannerProps> = ({ onAutoBuy }) => {
     const [opportunities, setOpportunities] = useState<MarketOpportunity[]>([]);
     const [isScanning, setIsScanning] = useState(false);
+    const [isFullAuto, setIsFullAuto] = useState(false);
     const { toggleAsset, selectedAssets } = useBotStore();
 
     const calculateOpportunityScore = (rsi: number, emaFast: number, emaSlow: number): { score: number, signal: 'BUY' | 'WAIT' | 'SELL', strength: number } => {
@@ -100,6 +105,18 @@ const MarketScannerPanel: React.FC = () => {
             results.sort((a, b) => b.score - a.score);
             setOpportunities(results);
 
+            // AUTO-BUY LOGIC (The Selector)
+            if (isFullAuto && onAutoBuy) {
+                const bestOpp = results[0];
+                if (bestOpp && bestOpp.score > 80 && bestOpp.signal === 'BUY') {
+                    // Check if not already in portfolio (simplified check via selectedAssets map or relying on App.tsx to deduce)
+                    // Ideally we check activeTrades but MarketScanner doesn't know them.
+                    // We just trigger onAutoBuy, App.tsx should validate dups.
+                    console.log(`🤖 [THE SELECTOR] Oportunidad detectada en ${bestOpp.ticker}. Ejecutando auto-compra...`);
+                    onAutoBuy(bestOpp.ticker, bestOpp.price);
+                }
+            }
+
         } catch (error) {
             console.error("Market Scan failed", error);
         } finally {
@@ -131,13 +148,26 @@ const MarketScannerPanel: React.FC = () => {
                     </h3>
                     <p className="text-xs text-gray-500">Buscando oportunidades en Top 10 Caps (1H)</p>
                 </div>
-                <button
-                    onClick={scanMarket}
-                    disabled={isScanning}
-                    className={`p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors ${isScanning ? 'animate-spin' : ''}`}
-                >
-                    <RefreshCw size={16} className="text-gray-400" />
-                </button>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 bg-black/40 p-1.5 rounded-lg border border-white/5">
+                        <span className={`text-[10px] font-bold ${isFullAuto ? 'text-green-400' : 'text-gray-500'}`}>
+                            {isFullAuto ? '🤖 AUTO-TRADING ON' : '🤖 AUTO OFF'}
+                        </span>
+                        <button
+                            onClick={() => setIsFullAuto(!isFullAuto)}
+                            className={`w-8 h-4 rounded-full relative transition-colors ${isFullAuto ? 'bg-green-500' : 'bg-gray-600'}`}
+                        >
+                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isFullAuto ? 'left-4.5' : 'left-0.5'}`}></div>
+                        </button>
+                    </div>
+                    <button
+                        onClick={scanMarket}
+                        disabled={isScanning}
+                        className={`p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors ${isScanning ? 'animate-spin' : ''}`}
+                    >
+                        <RefreshCw size={16} className="text-gray-400" />
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-auto rounded-lg bg-black/20 border border-white/5">

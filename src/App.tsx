@@ -134,7 +134,7 @@ function App() {
               throw err;
             }
           }} />
-          <MarketScannerPanel />
+          <MarketScannerPanel onAutoBuy={(ticker, price) => handleConfirmTrade(ticker, price.toString(), "1000")} />
         </div>
       ) : activeView === 'market' ? (
         <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />

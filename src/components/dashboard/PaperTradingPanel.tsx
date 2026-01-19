@@ -220,20 +220,31 @@ const PaperTradingPanel: React.FC = () => {
                         const emaSlow = slowSeries[i] || 0;
 
                         // Logic Mirroring StrategyUnit
-                        if (emaFast > emaSlow && rsi > 50) {
+                        // Enhanced Logic for "Thinking" UI
+                        if (rsi < 30) {
                             newSignals[trade.id] = {
-                                signal: "MANTENER (Fuerte)",
-                                color: "text-green-400"
+                                signal: "🟢 Oportunidad Compr (RSI Bajo)", // Shortened for UI fit
+                                color: "text-green-400 font-bold"
+                            };
+                        } else if (rsi > 70) {
+                            newSignals[trade.id] = {
+                                signal: "🔴 Sobrecompra (Prep Venta)",
+                                color: "text-red-400 font-bold"
+                            };
+                        } else if (emaFast > emaSlow) {
+                            newSignals[trade.id] = {
+                                signal: "🚀 Tendencia Alcista (Hold)",
+                                color: "text-green-300"
                             };
                         } else if (emaFast < emaSlow) {
                             newSignals[trade.id] = {
-                                signal: "VENTA SUGERIDA",
-                                color: "text-red-400 font-bold animate-pulse"
+                                signal: "⚠️ Tendencia Rota (Cerrar)",
+                                color: "text-orange-400"
                             };
                         } else {
                             newSignals[trade.id] = {
-                                signal: "MANTENER",
-                                color: "text-gray-400"
+                                signal: "⏳ Esperando Señal",
+                                color: "text-gray-500"
                             };
                         }
                     }
@@ -378,9 +389,14 @@ const PaperTradingPanel: React.FC = () => {
                                             </td>
                                             <td className="py-4 px-4 font-mono text-right font-bold">
                                                 {currentPriceDisplay ? (
-                                                    <span className="animate-pulse-slow text-accent">
-                                                        ${currentPriceDisplay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </span>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="animate-pulse-slow text-accent">
+                                                            ${currentPriceDisplay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </span>
+                                                        <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-1 opacity-70" title="Stop Loss Dinámico (-2%)">
+                                                            🛡️ ${(currentPriceDisplay * 0.98).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </div>
+                                                    </div>
                                                 ) : (
                                                     <span className="text-yellow-500/80 text-xs animate-pulse">Connecting...</span>
                                                 )}
@@ -417,7 +433,29 @@ const PaperTradingPanel: React.FC = () => {
                     </div>
                 ) : (
                     // HISTORY TABLE
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto space-y-4">
+                        {/* Summary Aggregator */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div className="bg-white/5 p-4 rounded-lg border border-white/10 flex flex-col items-center">
+                                <span className="text-gray-400 text-xs uppercase">Beneficio Total</span>
+                                <span className={`text-2xl font-bold ${trades.reduce((acc, t) => acc + (t.final_pnl || 0), 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    ${trades.reduce((acc, t) => acc + (t.final_pnl || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                            </div>
+                            <div className="bg-white/5 p-4 rounded-lg border border-white/10 flex flex-col items-center">
+                                <span className="text-gray-400 text-xs uppercase">Win Rate</span>
+                                <span className="text-2xl font-bold text-accent">
+                                    {trades.length > 0
+                                        ? ((trades.filter(t => (t.final_pnl || 0) > 0).length / trades.length) * 100).toFixed(0)
+                                        : 0}%
+                                </span>
+                            </div>
+                            <div className="bg-white/5 p-4 rounded-lg border border-white/10 flex flex-col items-center">
+                                <span className="text-gray-400 text-xs uppercase">Trades Cerrados</span>
+                                <span className="text-2xl font-bold text-white">{trades.length}</span>
+                            </div>
+                        </div>
+
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="text-gray-400 border-b border-white/10 text-xs uppercase tracking-wider">
