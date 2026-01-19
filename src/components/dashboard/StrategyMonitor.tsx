@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Power, Plus, Trash2 } from 'lucide-react';
 import { useStrategyStore } from '../../store/strategyStore';
 import { useBotStore } from '../../store/botStore';
+import { useBinancePrices } from '../../hooks/useBinancePrices';
 import StrategyUnit from './StrategyUnit';
 import BotActivityPanel from './BotActivityPanel';
 
@@ -15,6 +16,9 @@ const StrategyMonitor: React.FC<StrategyMonitorProps> = ({ onExecuteTrade }) => 
     const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
     const [newAsset, setNewAsset] = useState('');
     const [activeTrades, setActiveTrades] = useState<any[]>([]);
+
+    // Centralized Price Fetching
+    const livePrices = useBinancePrices(selectedAssets);
 
     const fetchActiveTrades = async () => {
         try {
@@ -146,6 +150,7 @@ graph TD
                                 <StrategyUnit
                                     key={ticker}
                                     ticker={ticker}
+                                    currentPrice={livePrices[ticker] || livePrices[`${ticker}USDT`]}
                                     activeTrade={activeTrade}
                                     onExecuteTrade={async (side, price, reason, t, amount) => {
                                         if (onExecuteTrade) {

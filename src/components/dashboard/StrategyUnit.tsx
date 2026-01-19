@@ -10,11 +10,12 @@ import { type Candle } from '../../services/backtestEngine';
 interface StrategyUnitProps {
     ticker: string;
     activeTrade?: any;
+    currentPrice?: number;
     onExecuteTrade?: (side: 'BUY' | 'SELL', price: number, reason: string, ticker: string, amount: number) => Promise<void>;
     onRefresh?: () => void;
 }
 
-const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, activeTrade, onRefresh }) => {
+const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, activeTrade, onRefresh, currentPrice }) => {
     const params = useStrategyStore();
     const { addLog, toggleAsset } = useBotStore();
 
@@ -34,6 +35,14 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
 
     // Latest Logic Reference for Event Listener
     const updateLogicRef = useRef<(p: number) => void>(() => { });
+
+    // Sync external price from Parent (Fixes $0 issue)
+    useEffect(() => {
+        if (currentPrice && currentPrice > 0) {
+            setPrice(currentPrice);
+            updateLogicRef.current(currentPrice);
+        }
+    }, [currentPrice]);
 
     useEffect(() => {
         updateLogicRef.current = (currentPrice: number) => {
@@ -262,7 +271,9 @@ const StrategyUnit: React.FC<StrategyUnitProps> = ({ ticker, onExecuteTrade, act
                         {ticker} <span className="text-xs text-gray-500 font-normal">1h</span>
                     </h4>
                     <p className="text-lg font-mono font-bold text-accent">
-                        ${price.toLocaleString()}
+                        ${price < 1
+                            ? price.toFixed(6)
+                            : price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                 </div>
 
