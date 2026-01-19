@@ -4,8 +4,8 @@
     "description": "Headless Trading Bot Worker for Render",
     "main": "bot-engine.ts",
     "scripts": {
-        "start": "ts-node bot-engine.ts",
-        "dev": "nodemon bot-engine.ts"
+        "build": "tsc",
+        "start": "node dist/bot-engine.js"
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.39.0",
