@@ -105,7 +105,7 @@ function App() {
             const quantity = parseFloat(formatQuantity(investAmount / price));
 
             try {
-              const { error } = await supabase.from('active_trades').insert([{
+              const { error } = await supabase.from('paper_trades').insert([{
                 ticker: ticker || 'BTCUSDT',
                 entry_price: price,
                 invested_amount: investAmount,
