@@ -24,6 +24,7 @@ function App() {
   };
 
   const handleConfirmTrade = async (ticker: string, priceStr: string, amountStr: string) => {
+    const cleanTicker = ticker.replace('$', '').trim().toUpperCase();
     const price = priceStr ? parseFloat(priceStr) : 0;
     const amount = amountStr ? parseFloat(amountStr) : 0;
 
@@ -34,9 +35,9 @@ function App() {
     if (!selectedNews) return;
 
     try {
-      const { error } = await supabase.from('active_trades').insert([
+      const { error } = await supabase.from('paper_trades').insert([
         {
-          ticker: ticker,
+          ticker: cleanTicker,
           entry_price: price,
           invested_amount: amount,
           quantity: quantity,
@@ -103,14 +104,14 @@ function App() {
             const investAmount = amount || 1000; // Use input amount or fallback
             // const quantity .... (rest is same, but I need to recalc quantity)
             const quantity = parseFloat(formatQuantity(investAmount / price));
+            const cleanTicker = (ticker || 'BTCUSDT').replace('$', '').trim().toUpperCase();
 
             try {
               const { error } = await supabase.from('paper_trades').insert([{
-                ticker: ticker || 'BTCUSDT',
+                ticker: cleanTicker,
                 entry_price: price,
                 invested_amount: investAmount,
                 quantity,
-                news_id: 'AUTO_' + Date.now(),
                 initial_score: 0,
                 status: 'OPEN',
               }]);
