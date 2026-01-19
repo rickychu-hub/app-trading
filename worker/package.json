@@ -1,0 +1,22 @@
+{
+    "name": "invintel-worker",
+    "version": "1.0.0",
+    "description": "Headless Trading Bot Worker for Render",
+    "main": "bot-engine.ts",
+    "scripts": {
+        "start": "ts-node bot-engine.ts",
+        "dev": "nodemon bot-engine.ts"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.39.0",
+        "axios": "^1.6.2",
+        "dotenv": "^16.3.1",
+        "technicalindicators": "^3.1.0"
+    },
+    "devDependencies": {
+        "ts-node": "^10.9.1",
+        "typescript": "^5.2.2",
+        "nodemon": "^3.0.1",
+        "@types/node": "^20.8.0"
+    }
+}

@@ -26,8 +26,22 @@ interface MarketScannerProps {
 const MarketScannerPanel: React.FC<MarketScannerProps> = ({ onAutoBuy }) => {
     const [opportunities, setOpportunities] = useState<MarketOpportunity[]>([]);
     const [isScanning, setIsScanning] = useState(false);
-    const [isFullAuto, setIsFullAuto] = useState(false);
+    // Initialize from LocalStorage
+    const [isFullAuto, setIsFullAuto] = useState(() => {
+        const saved = localStorage.getItem('isAutoTrading');
+        return saved === 'true';
+    });
     const { toggleAsset, selectedAssets } = useBotStore();
+
+    // Persist Change
+    const handleToggleAuto = () => {
+        const newValue = !isFullAuto;
+        setIsFullAuto(newValue);
+        localStorage.setItem('isAutoTrading', String(newValue));
+        if (newValue) {
+            console.log("🔄 Auto-Trading Activado");
+        }
+    };
 
     const calculateOpportunityScore = (rsi: number, emaFast: number, emaSlow: number): { score: number, signal: 'BUY' | 'WAIT' | 'SELL', strength: number } => {
         let score = 50; // Base Score
@@ -125,11 +139,15 @@ const MarketScannerPanel: React.FC<MarketScannerProps> = ({ onAutoBuy }) => {
     };
 
     // Auto-scan on mount
+    // Auto-scan on mount and when Auto state changes (to capture new closure)
     useEffect(() => {
+        if (isFullAuto) {
+            console.log("🔄 Auto-Trading reanudado automáticamente (Loop Activo)");
+        }
         scanMarket();
         const interval = setInterval(scanMarket, 60000); // Rescan every 1 minute
         return () => clearInterval(interval);
-    }, []);
+    }, [isFullAuto]);
 
     const handleCopy = (ticker: string) => {
         if (!selectedAssets.includes(ticker)) {
@@ -154,7 +172,7 @@ const MarketScannerPanel: React.FC<MarketScannerProps> = ({ onAutoBuy }) => {
                             {isFullAuto ? '🤖 AUTO-TRADING ON' : '🤖 AUTO OFF'}
                         </span>
                         <button
-                            onClick={() => setIsFullAuto(!isFullAuto)}
+                            onClick={handleToggleAuto}
                             className={`w-8 h-4 rounded-full relative transition-colors ${isFullAuto ? 'bg-green-500' : 'bg-gray-600'}`}
                         >
                             <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isFullAuto ? 'left-4.5' : 'left-0.5'}`}></div>
