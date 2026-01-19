@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { ScrollText, PauseCircle, CheckCircle, XCircle } from 'lucide-react';
+import { ScrollText } from 'lucide-react';
 import { useBotStore } from '../../store/botStore';
 
 const BotActivityPanel: React.FC = () => {
