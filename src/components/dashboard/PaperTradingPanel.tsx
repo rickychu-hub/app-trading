@@ -6,6 +6,7 @@ import { Loader2, TrendingUp, TrendingDown, XCircle, AlertTriangle } from 'lucid
 import { useBinancePrices } from '../../hooks/useBinancePrices';
 import { binanceService } from '../../services/binancePriceService';
 import { analysisService } from '../../services/analysisService';
+import { supabase } from '../../lib/supabaseClient';
 
 interface Trade {
     id: number;
@@ -39,10 +40,17 @@ const PaperTradingPanel: React.FC = () => {
         setLoading(true);
         try {
             const status = activeTab === 'active' ? 'OPEN' : 'CLOSED';
-            const response = await fetch(`/api/trades?status=${status}`);
-            if (response.ok) {
-                const data = await response.json();
+            const { data, error } = await supabase
+                .from('paper_trades')
+                .select('*')
+                .eq('status', status)
+                .order('created_at', { ascending: false });
+
+            if (data) {
                 setTrades(data);
+            }
+            if (error) {
+                console.error("Supabase error fetching trades:", error);
             }
         } catch (error) {
             console.error("Error fetching trades:", error);
