@@ -79,18 +79,28 @@ function calculateIndicators(candles: Candle[]) {
 // --- Trading Logic ---
 
 async function executeTrade(ticker: string, price: number, amount: number) {
-    if (!price || price <= 0) return;
-    // 1. Check if we already have an open trade for this user/bot
-    const cleanTicker = ticker.replace('USDT', '');
+    if (!price || price <= 0) {
+        console.warn(`⚠️ SKIPPING BUY: Invalid Price $${price} for ${ticker}`);
+        return;
+    }
 
-    const { data: existingTrades } = await supabase
+    // 1. Check if we already have an open trade for this user/bot (Idempotency)
+    const cleanTicker = ticker.replace('USDT', '').trim().toUpperCase();
+
+    // Double Check: Verify if ANY open position exists for this ticker
+    const { data: existingTrades, error: fetchError } = await supabase
         .from('paper_trades')
-        .select('id')
-        .eq('ticker', cleanTicker)
-        .eq('status', 'OPEN');
+        .select('id, ticker, status')
+        .eq('status', 'OPEN')
+        .ilike('ticker', cleanTicker); // Use ilike for case-insensitivity
+
+    if (fetchError) {
+        console.error(`❌ DB Error checking duplicates for ${cleanTicker}:`, fetchError.message);
+        return; // Fail safe
+    }
 
     if (existingTrades && existingTrades.length > 0) {
-        console.log(`⏸️  Skipping ${cleanTicker}: Position already open.`);
+        console.log(`⏸️  Skipping ${cleanTicker}: Position already open (ID: ${existingTrades[0].id}).`);
         return;
     }
 

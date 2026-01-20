@@ -174,9 +174,16 @@ const PaperTradingPanel: React.FC = () => {
         trades.forEach(t => {
             if (t.status === 'OPEN') {
                 const qty = t.quantity || (t.invested_amount && t.entry_price ? t.invested_amount / t.entry_price : 1); // Fallback for legacy trades
-                const investedAmt = t.invested_amount || t.entry_price; // Legacy: price = amount (1 unit)
+                const investedAmt = t.invested_amount || t.entry_price || 0; // Legacy: price = amount (1 unit)
 
-                const currentPrice = currentPrices[t.ticker] || t.entry_price;
+                // Strong Fallback Logic:
+                // 1. Current Live Price (if > 0)
+                // 2. Entry Price (if no live price)
+                // 3. 0 as last resort
+                let currentPrice = currentPrices[t.ticker];
+                if (!currentPrice || currentPrice <= 0) {
+                    currentPrice = t.entry_price || 0;
+                }
 
                 invested += investedAmt;
                 current += (currentPrice * qty);
@@ -398,7 +405,7 @@ const PaperTradingPanel: React.FC = () => {
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-yellow-500/80 text-xs animate-pulse">Connecting...</span>
+                                                    <span className="text-yellow-500/80 text-xs animate-pulse">Obteniendo...</span>
                                                 )}
                                             </td>
                                             <td className="py-4 px-4 font-mono text-right">
