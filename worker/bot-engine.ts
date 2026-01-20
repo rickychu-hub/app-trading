@@ -156,13 +156,93 @@ async function runMarketScan() {
 
 // --- Main Loop ---
 
+async function managePositions() {
+    console.log("🛡️ Checking Risk Levels for Open Positions...");
+
+    // 1. Fetch ALL Open Trades
+    const { data: openTrades, error } = await supabase
+        .from('paper_trades')
+        .select('*')
+        .eq('status', 'OPEN');
+
+    if (error || !openTrades || openTrades.length === 0) return;
+
+    for (const trade of openTrades) {
+        // Normalize Ticker to match Binance format (e.g. BTC -> BTCUSDT)
+        const symbol = trade.ticker.endsWith('USDT') ? trade.ticker : `${trade.ticker}USDT`;
+
+        // 2. Get Live Price
+        // Optimization: In a real bot, we would fetch all prices properly, here we fetch one by one
+        const candles = await fetchCandles(symbol, '1m', 5); // 1m candles for fast reaction
+        if (!candles || candles.length === 0) continue;
+
+        const currentPrice = candles[candles.length - 1].close;
+        const entryPrice = trade.entry_price || trade.invested_amount; // Fallback for legacy
+
+        if (!entryPrice || entryPrice <= 0) continue;
+
+        // 3. Risk Logic
+        const pnlPercent = (currentPrice - entryPrice) / entryPrice; // e.g. -0.05 for -5%
+
+        let shouldSell = false;
+        let reason = "";
+
+        // Stop Loss (-2%)
+        if (pnlPercent <= -0.02) {
+            shouldSell = true;
+            reason = `STOP LOSS TRIGGERED (${(pnlPercent * 100).toFixed(2)}%)`;
+        }
+
+        // Take Profit (+5%)
+        else if (pnlPercent >= 0.05) {
+            shouldSell = true;
+            reason = `TAKE PROFIT TRIGGERED (+${(pnlPercent * 100).toFixed(2)}%)`;
+        }
+
+        // 4. Execute Sale
+        if (shouldSell) {
+            console.log(`🚨 EXECUTING SALE for ${trade.ticker}: ${reason}`);
+
+            // Calc Final PnL Amount
+            const invested = trade.invested_amount || entryPrice;
+            const quantity = trade.quantity || (invested / entryPrice);
+            const exitValue = quantity * currentPrice;
+            const finalPnL = exitValue - invested;
+
+            const { error: closeError } = await supabase
+                .from('paper_trades')
+                .update({
+                    status: 'CLOSED',
+                    exit_price: currentPrice,
+                    exit_time: new Date().toISOString(),
+                    final_pnl: finalPnL,
+                    close_reason: reason
+                })
+                .eq('id', trade.id);
+
+            if (closeError) {
+                console.error(`❌ FAILED to close trade ${trade.id}:`, closeError.message);
+            } else {
+                console.log(`✅ Trade ${trade.id} CLOSED successfully.`);
+            }
+        }
+    }
+}
+
+// --- Main Loop ---
+
 async function startBot() {
     console.log('🤖 Headless Bot Worker Started...');
     console.log(`Targeting: ${TOP_ASSETS.join(', ')}`);
 
     while (true) {
         try {
+            // Priority 1: Manage Risks (Sell before Buy)
+            await managePositions();
+
+            // Priority 2: Look for opportunities
             await runMarketScan();
+
             console.log('💤 Cycle complete. Sleeping...');
         } catch (error) {
             console.error('❌ Critical Loop Error:', error);
