@@ -67,12 +67,14 @@ function calculateIndicators(candles: Candle[]) {
     const emaSlow = EMA.calculate(emaSlowInput);
     const rsi = RSI.calculate(rsiInput);
 
-    // Get latest values (last index)
+    // Get latest values (last index) & Previous
     return {
         price: closes[closes.length - 1],
+        prevPrice: closes[closes.length - 2] || 0, // Close of previous candle
         emaFast: emaFast[emaFast.length - 1] || 0,
         emaSlow: emaSlow[emaSlow.length - 1] || 0,
-        rsi: rsi[rsi.length - 1] || 50
+        rsiCurrent: rsi[rsi.length - 1] || 50,
+        rsiPrevious: rsi[rsi.length - 2] || 50
     };
 }
 
@@ -112,9 +114,9 @@ async function executeTrade(ticker: string, price: number, amount: number) {
         entry_price: price,
         invested_amount: amount,
         quantity: quantity,
-        initial_score: 85, // Auto-Bot Score
+        initial_score: 90, // High score for manual confirmation strategy
         status: 'OPEN',
-        news_id: 'BOT-WORKER' // Marker for headless bot
+        news_id: 'BOT-RSI-CROSS' // Marker for this specific strategy
     }]);
 
     if (error) console.error(`❌ DB Insert Error for ${cleanTicker}:`, error.message);
@@ -130,26 +132,27 @@ async function runMarketScan() {
         if (candles.length < 30) continue;
 
         // 2. Analyze
-        const { price, emaFast, emaSlow, rsi } = calculateIndicators(candles);
+        const { price, prevPrice, rsiCurrent, rsiPrevious } = calculateIndicators(candles);
 
-        // 3. Logic (Trend Following)
-        const spread = emaFast - emaSlow;
-        const trendUp = spread > 0;
-        const momentum = rsi > 50 && rsi < 70;
+        // 3. Logic: RSI Crossover (Dip Buying with Confirmation)
+        // Condition A: Previous RSI was < 30 (Oversold)
+        const wasOversold = rsiPrevious < 30;
 
-        // Custom Score Logic
-        let score = 50;
-        if (trendUp) score += 20;
-        if (momentum) score += 15;
-        if (rsi > 75) score -= 10; // Overbought
+        // Condition B: Current RSI > Previous RSI (Turning Up)
+        const isRecovering = rsiCurrent > rsiPrevious;
 
-        const logMsg = `${symbol.padEnd(8)} | Price: ${price.toFixed(2)} | RSI: ${rsi.toFixed(1)} | Spread: ${spread.toFixed(2)} | Score: ${score}`;
-        // console.log(logMsg); // Verbose log
+        // Condition C: Green Candle (Price Confirmation)
+        const isGreenCandle = price > prevPrice;
+
+        const logMsg = `${symbol.padEnd(8)} | Price: ${price.toFixed(2)} | RSI Prev: ${rsiPrevious.toFixed(1)} -> Curr: ${rsiCurrent.toFixed(1)}`;
+        // console.log(logMsg); 
 
         // 4. Decision
-        if (score >= 80) {
-            console.log(`✅ OPPORTUNITY FOUND: ${logMsg}`);
-            await executeTrade(symbol, price, 1000); // 1k investment
+        if (wasOversold && isRecovering && isGreenCandle) {
+            console.log(`✅ BUY SIGNAL (RSI Turn): ${logMsg}`);
+            await executeTrade(symbol, price, 1000);
+        } else if (wasOversold && !isRecovering) {
+            console.log(`⚠️ Watching ${symbol} (Falling Knife): RSI ${rsiCurrent.toFixed(1)} still dropping...`);
         }
     }
 }
