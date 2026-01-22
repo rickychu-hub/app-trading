@@ -184,22 +184,45 @@ async function managePositions() {
 
         if (!entryPrice || entryPrice <= 0) continue;
 
-        // 3. Risk Logic
-        const pnlPercent = (currentPrice - entryPrice) / entryPrice; // e.g. -0.05 for -5%
-
+        // 3. Risk Logic & Max Price Tracking
         let shouldSell = false;
         let reason = "";
 
-        // Stop Loss (-2%)
-        if (pnlPercent <= -0.02) {
-            shouldSell = true;
-            reason = `STOP LOSS TRIGGERED (${(pnlPercent * 100).toFixed(2)}%)`;
+        // A. Update Highest Price (Trailing Stop Base)
+        // Ensure we have a valid baseline for highest price
+        let highestPrice = trade.highest_price;
+        if (!highestPrice || highestPrice < entryPrice) {
+            highestPrice = entryPrice;
         }
 
-        // Take Profit (+5%)
-        else if (pnlPercent >= 0.05) {
+        // If current price exceeds recorded highest, update it
+        if (currentPrice > highestPrice) {
+            highestPrice = currentPrice;
+
+            // Persist new High to DB so we don't lose it if bot restarts
+            await supabase
+                .from('paper_trades')
+                .update({ highest_price: highestPrice })
+                .eq('id', trade.id);
+
+            console.log(`📈 New High for ${trade.ticker}: $${highestPrice} (Tracking for Trailing Stop)`);
+        }
+
+        // B. Calculate Thresholds
+        const dynamicStopPrice = highestPrice * 0.98; // 2% drop from Peak
+        const hardStopPrice = entryPrice * 0.97;      // 3% drop from Entry (Safety Net)
+
+        // C. Check Sell Conditions
+        if (currentPrice < dynamicStopPrice) {
+            // Condition 1: Trailing Stop Hit
             shouldSell = true;
-            reason = `TAKE PROFIT TRIGGERED (+${(pnlPercent * 100).toFixed(2)}%)`;
+            reason = `TRAILING STOP HIT (Dropped from Peak $${highestPrice})`;
+        }
+        else if (currentPrice < hardStopPrice) {
+            // Condition 2: Safety Hard Stop Hit
+            shouldSell = true;
+            const pnl = ((currentPrice - entryPrice) / entryPrice) * 100;
+            reason = `HARD STOP HIT (Safety Net Triggered at ${pnl.toFixed(2)}%)`;
         }
 
         // 4. Execute Sale
