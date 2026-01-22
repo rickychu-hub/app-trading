@@ -19,7 +19,16 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const TOP_ASSETS = [
-    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT'
+    // 1. Los Reyes (Seguridad y Volumen)
+    'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+    // 2. Capa 1 Alternativas (Alta Volatilidad, Proyectos Serios)
+    'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'NEARUSDT', 'SUIUSDT', 'APTUSDT', 'TRXUSDT', 'MATICUSDT',
+    // 3. Inteligencia Artificial (El Sector de Moda)
+    'FETUSDT', 'RNDRUSDT', 'TAOUSDT', 'ICPUSDT',
+    // 4. DeFi & Infraestructura
+    'LINKUSDT', 'UNIUSDT', 'AAVEUSDT', 'OPUSDT', 'ARBUSDT', 'TIAUSDT', 'INJUSDT',
+    // 5. Memecoins "Blue Chip" (Volatilidad Extrema pero Líquida)
+    'DOGEUSDT', 'SHIBUSDT', 'PEPEUSDT', 'WIFUSDT'
 ];
 
 interface Candle {
@@ -154,6 +163,9 @@ async function runMarketScan() {
         } else if (wasOversold && !isRecovering) {
             console.log(`⚠️ Watching ${symbol} (Falling Knife): RSI ${rsiCurrent.toFixed(1)} still dropping...`);
         }
+
+        // Rate Limit Protection (Avoid 429)
+        await new Promise(resolve => setTimeout(resolve, 150)); // 150ms de pausa entre monedas.
     }
 }
 

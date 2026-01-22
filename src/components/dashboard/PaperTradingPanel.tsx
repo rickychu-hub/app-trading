@@ -19,6 +19,7 @@ interface Trade {
     status: string;
     latest_sentiment_score?: number;
     latest_news_title?: string;
+    highest_price?: number; // New field for Trailing Stop
     // Closed trade fields
     exit_price?: number;
     final_pnl?: number;
@@ -375,6 +376,11 @@ const PaperTradingPanel: React.FC = () => {
                                     const pnl = livePrice ? (currentValue - investedAmt) : 0;
                                     const pnlPercent = investedAmt > 0 ? (pnl / investedAmt) * 100 : 0;
 
+                                    // Trailing Stop Logic for Display
+                                    const highestPrice = trade.highest_price ? Math.max(trade.highest_price, currentPriceDisplay || 0) : Math.max(trade.entry_price, currentPriceDisplay || 0);
+                                    const dynamicStopPrice = highestPrice * 0.98;
+                                    const distanceToStop = currentPriceDisplay ? ((currentPriceDisplay - dynamicStopPrice) / currentPriceDisplay) * 100 : 0;
+
                                     return (
                                         <tr
                                             key={trade.id}
@@ -384,6 +390,7 @@ const PaperTradingPanel: React.FC = () => {
                                         >
                                             <td className="py-4 px-4 text-sm text-gray-400">
                                                 {new Date(trade.created_at).toLocaleDateString()}
+                                                <span className="block text-[10px] opacity-50">{new Date(trade.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </td>
                                             <td className="py-4 px-4 font-bold text-white group-hover:text-accent transition-colors">
                                                 {ticker}
@@ -396,12 +403,24 @@ const PaperTradingPanel: React.FC = () => {
                                             </td>
                                             <td className="py-4 px-4 font-mono text-right font-bold">
                                                 {currentPriceDisplay ? (
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="animate-pulse-slow text-accent">
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <span className="text-white text-sm">
                                                             ${currentPriceDisplay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </span>
-                                                        <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-1 opacity-70" title="Stop Loss Dinámico (-2%)">
-                                                            🛡️ ${(currentPriceDisplay * 0.98).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+                                                        {/* Trailing Stop Visualization */}
+                                                        <div className="flex flex-col items-end bg-white/5 p-1.5 rounded border border-white/5 w-max">
+                                                            <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                                                                <TrendingUp size={10} className="text-green-500" />
+                                                                Pico: <span className="text-gray-300">${highestPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
+                                                                <AlertTriangle size={10} className="text-orange-500" />
+                                                                Stop: <span className="text-orange-300">${dynamicStopPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                            </div>
+                                                            <span className={`text-[9px] mt-0.5 ${distanceToStop < 0.5 ? 'text-red-500 animate-pulse font-bold' : 'text-gray-500'}`}>
+                                                                Margen: {distanceToStop.toFixed(2)}%
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -466,7 +485,8 @@ const PaperTradingPanel: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="text-gray-400 border-b border-white/10 text-xs uppercase tracking-wider">
-                                    <th className="py-4 px-4">Fecha Venta</th>
+                                    <th className="py-4 px-4">Fecha Entrada</th>
+                                    <th className="py-4 px-4">Fecha Salida</th>
                                     <th className="py-4 px-4">Ticker</th>
                                     <th className="py-4 px-4 text-right">Entrada</th>
                                     <th className="py-4 px-4 text-right">Salida</th>
@@ -479,13 +499,25 @@ const PaperTradingPanel: React.FC = () => {
                                     const pnl = trade.final_pnl || 0;
                                     const colorClass = pnl >= 0 ? 'text-green-400' : 'text-red-400';
 
+                                    // Format: "22 Jan, 14:30"
+                                    const formatDate = (dateString?: string) => {
+                                        if (!dateString) return '-';
+                                        const date = new Date(dateString);
+                                        return date.toLocaleDateString('en-GB', {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        });
+                                    };
+
                                     return (
                                         <tr key={trade.id} className="text-gray-300 border-b border-white/5 hover:bg-white/5 transition-colors">
                                             <td className="py-4 px-4 text-sm text-gray-400">
-                                                {trade.exit_time ? new Date(trade.exit_time).toLocaleDateString() : '-'}
-                                                <span className="block text-xs opacity-50">
-                                                    {trade.exit_time ? new Date(trade.exit_time).toLocaleTimeString() : ''}
-                                                </span>
+                                                {formatDate(trade.created_at)}
+                                            </td>
+                                            <td className="py-4 px-4 text-sm text-gray-400">
+                                                {formatDate(trade.exit_time)}
                                             </td>
                                             <td className="py-4 px-4 font-bold text-white">
                                                 {trade.ticker}

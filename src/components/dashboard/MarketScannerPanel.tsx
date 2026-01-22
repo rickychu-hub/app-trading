@@ -14,9 +14,16 @@ interface MarketOpportunity {
 }
 
 const TOP_ASSETS = [
-    'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'AVAX', 'SHIB', 'DOT',
-    'LINK', 'TRX', 'MATIC', 'BCH', 'NEAR', 'UNI', 'LTC', 'APT', 'ICP', 'RNDR',
-    'HBAR', 'FIL', 'ATOM', 'ARB', 'STX', 'IMX', 'KAS', 'VET', 'XLM', 'INJ'
+    // 1. Los Reyes
+    'BTC', 'ETH', 'BNB', 'SOL', 'XRP',
+    // 2. L1 Alts
+    'ADA', 'AVAX', 'DOT', 'NEAR', 'SUI', 'APT', 'TRX', 'MATIC',
+    // 3. AI
+    'FET', 'RNDR', 'TAO', 'ICP',
+    // 4. DeFi
+    'LINK', 'UNI', 'AAVE', 'OP', 'ARB', 'TIA', 'INJ',
+    // 5. Memes
+    'DOGE', 'SHIB', 'PEPE', 'WIF'
 ];
 
 interface MarketScannerProps {
@@ -115,17 +122,15 @@ const MarketScannerPanel: React.FC<MarketScannerProps> = ({ onAutoBuy }) => {
                 }
             }
 
-            // Sort by Score Descending
-            results.sort((a, b) => b.score - a.score);
+            // Sort by RSI Ascending (Lowest RSI first - Potential Dips)
+            results.sort((a, b) => a.rsi - b.rsi);
             setOpportunities(results);
 
             // AUTO-BUY LOGIC (The Selector)
             if (isFullAuto && onAutoBuy) {
-                const bestOpp = results[0];
-                if (bestOpp && bestOpp.score > 80 && bestOpp.signal === 'BUY') {
-                    // Check if not already in portfolio (simplified check via selectedAssets map or relying on App.tsx to deduce)
-                    // Ideally we check activeTrades but MarketScanner doesn't know them.
-                    // We just trigger onAutoBuy, App.tsx should validate dups.
+                // Look for deepest dip with confirmation
+                const bestOpp = results.find(r => r.rsi < 30 && r.signal !== 'SELL');
+                if (bestOpp && bestOpp.score > 60) {
                     console.log(`🤖 [THE SELECTOR] Oportunidad detectada en ${bestOpp.ticker}. Ejecutando auto-compra...`);
                     onAutoBuy(bestOpp.ticker, bestOpp.price);
                 }
@@ -138,7 +143,6 @@ const MarketScannerPanel: React.FC<MarketScannerProps> = ({ onAutoBuy }) => {
         }
     };
 
-    // Auto-scan on mount
     // Auto-scan on mount and when Auto state changes (to capture new closure)
     useEffect(() => {
         if (isFullAuto) {
@@ -157,23 +161,21 @@ const MarketScannerPanel: React.FC<MarketScannerProps> = ({ onAutoBuy }) => {
     };
 
     return (
-        <div className="glass-panel rounded-xl border border-white/10 p-6 flex flex-col h-full animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
+        <div className="glass-panel rounded-xl border border-white/10 p-4 flex flex-col h-full animate-fade-in max-h-[600px]">
+            <div className="flex justify-between items-center mb-4">
                 <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Target className="text-accent" />
-                        Market Scanner (IA)
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Target className="text-accent" size={18} />
+                        Oportunidades (RSI)
                     </h3>
-                    <p className="text-xs text-gray-500">Buscando oportunidades en Top 10 Caps (1H)</p>
+                    <p className="text-[10px] text-gray-500">Ordenado por RSI (Menor a Mayor)</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-black/40 p-1.5 rounded-lg border border-white/5">
-                        <span className={`text-[10px] font-bold ${isFullAuto ? 'text-green-400' : 'text-gray-500'}`}>
-                            {isFullAuto ? '🤖 AUTO-TRADING ON' : '🤖 AUTO OFF'}
-                        </span>
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-black/40 p-1 rounded-lg border border-white/5">
                         <button
                             onClick={handleToggleAuto}
                             className={`w-8 h-4 rounded-full relative transition-colors ${isFullAuto ? 'bg-green-500' : 'bg-gray-600'}`}
+                            title="Auto Trading Toggle"
                         >
                             <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isFullAuto ? 'left-4.5' : 'left-0.5'}`}></div>
                         </button>
@@ -181,80 +183,80 @@ const MarketScannerPanel: React.FC<MarketScannerProps> = ({ onAutoBuy }) => {
                     <button
                         onClick={scanMarket}
                         disabled={isScanning}
-                        className={`p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors ${isScanning ? 'animate-spin' : ''}`}
+                        className={`p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors ${isScanning ? 'animate-spin' : ''}`}
                     >
-                        <RefreshCw size={16} className="text-gray-400" />
+                        <RefreshCw size={14} className="text-gray-400" />
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-auto rounded-lg bg-black/20 border border-white/5">
+            <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
                 <table className="w-full text-left border-collapse">
-                    <thead className="sticky top-0 bg-[#0b1d16] z-10">
-                        <tr className="text-gray-500 text-[10px] uppercase tracking-wider border-b border-white/10">
-                            <th className="p-3">Asset</th>
-                            <th className="p-3 text-right">Price</th>
-                            <th className="p-3 text-center">Score</th>
-                            <th className="p-3 text-center">Signal</th>
-                            <th className="p-3 text-right">Action</th>
+                    <thead className="sticky top-0 bg-[#0b1d16] z-10 shadow-sm shadow-black/50">
+                        <tr className="text-gray-500 text-[9px] uppercase tracking-wider border-b border-white/10">
+                            <th className="p-2">Asset</th>
+                            <th className="p-2 text-right">RSI (14)</th>
+                            <th className="p-2 text-right">Price</th>
+                            <th className="p-2 text-center">Score</th>
+                            <th className="p-2 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="text-xs">
                         {opportunities.length === 0 && !isScanning && (
                             <tr>
-                                <td colSpan={5} className="p-8 text-center text-gray-500 text-xs">
-                                    No opportunities found or scan failed.
+                                <td colSpan={5} className="p-4 text-center text-gray-500 text-xs">
+                                    No opportunities found.
                                 </td>
                             </tr>
                         )}
                         {opportunities.length === 0 && isScanning && (
                             <tr>
-                                <td colSpan={5} className="p-8 text-center text-gray-500 text-xs">
+                                <td colSpan={5} className="p-4 text-center text-gray-500 text-xs">
                                     Scanning market...
                                 </td>
                             </tr>
                         )}
-                        {opportunities.map((opp) => (
-                            <tr key={opp.ticker} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                                <td className="p-3">
-                                    <span className="font-bold text-white">{opp.ticker}</span>
-                                    <span className="block text-[10px] text-gray-500">RSI: {opp.rsi.toFixed(0)}</span>
-                                </td>
-                                <td className="p-3 text-right font-mono text-xs text-gray-300">
-                                    ${opp.price.toLocaleString()}
-                                </td>
-                                <td className="p-3 text-center">
-                                    <div className="flex items-center justify-center gap-1">
-                                        <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full ${opp.score >= 70 ? 'bg-accent' : opp.score <= 30 ? 'bg-red-500' : 'bg-yellow-500'}`}
-                                                style={{ width: `${opp.score}%` }}
-                                            ></div>
-                                        </div>
-                                        <span className={`text-xs font-bold ${opp.score >= 70 ? 'text-accent' : opp.score <= 30 ? 'text-red-500' : 'text-yellow-500'}`}>
+                        {opportunities.map((opp) => {
+                            // RSI Color Logic
+                            let rsiColor = "text-gray-400";
+                            let rowBg = "hover:bg-white/5";
+
+                            if (opp.rsi < 30) {
+                                rsiColor = "text-green-400 font-bold animate-pulse";
+                                rowBg = "bg-green-500/5 hover:bg-green-500/10";
+                            } else if (opp.rsi > 70) {
+                                rsiColor = "text-red-400 font-bold";
+                                rowBg = "bg-red-500/5 hover:bg-red-500/10";
+                            }
+
+                            return (
+                                <tr key={opp.ticker} className={`border-b border-white/5 transition-colors group ${rowBg}`}>
+                                    <td className="p-2">
+                                        <span className="font-bold text-white">{opp.ticker}</span>
+                                    </td>
+                                    <td className={`p-2 text-right font-mono ${rsiColor}`}>
+                                        {opp.rsi.toFixed(1)}
+                                    </td>
+                                    <td className="p-2 text-right font-mono text-gray-400">
+                                        ${opp.price < 1 ? opp.price.toFixed(4) : opp.price.toLocaleString()}
+                                    </td>
+                                    <td className="p-2 text-center">
+                                        <span className={`text-[10px] font-bold ${opp.score >= 70 ? 'text-accent' : opp.score <= 30 ? 'text-red-500' : 'text-gray-500'}`}>
                                             {opp.score}
                                         </span>
-                                    </div>
-                                </td>
-                                <td className="p-3 text-center">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${opp.signal === 'BUY' ? 'bg-accent/20 text-accent' :
-                                        opp.signal === 'SELL' ? 'bg-red-500/20 text-red-500' :
-                                            'bg-gray-500/10 text-gray-500'
-                                        }`}>
-                                        {opp.signal}
-                                    </span>
-                                </td>
-                                <td className="p-3 text-right">
-                                    <button
-                                        onClick={() => handleCopy(opp.ticker)}
-                                        className="text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 p-1.5 rounded transition-colors"
-                                        title="Copiar al Dashboard"
-                                    >
-                                        <Copy size={14} />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="p-2 text-right">
+                                        <button
+                                            onClick={() => handleCopy(opp.ticker)}
+                                            className="text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 p-1 rounded transition-colors"
+                                            title="Ver Gráfico"
+                                        >
+                                            <Copy size={12} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
