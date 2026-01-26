@@ -3,22 +3,20 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export interface PortfolioStats {
-    totalEquity: number;
-    dailyPnL: number;
-    dailyPnLPercent: number;
-    invested: number;
-    available: number;
-    cashBalance?: number;
+    cashBalance: number;        // Dinero USDT libre
+    investedCapital: number;    // Valor actual de posiciones abiertas
+    totalEquity: number;        // cashBalance + investedCapital
+    dailyPnL: number;          // PnL realizado + no realizado del día
+    dailyPnLPercent: number;   // Porcentaje del PnL diario
 }
 
 export const usePortfolio = () => {
     const [stats, setStats] = useState<PortfolioStats>({
+        cashBalance: 0,
+        investedCapital: 0,
         totalEquity: 0,
         dailyPnL: 0,
-        dailyPnLPercent: 0,
-        invested: 0,
-        available: 0,
-        cashBalance: 0
+        dailyPnLPercent: 0
     });
     const [loading, setLoading] = useState(true);
 
@@ -28,25 +26,40 @@ export const usePortfolio = () => {
             const startOfDay = new Date();
             startOfDay.setHours(0, 0, 0, 0);
 
-            // 1. Get Daily Snapshot to find Start Balance
-            // If no entry for today, we assume 10000 or fetch from previous day?
-            // For simplicity, let's assume 10000 if not found, or try to get the latest balance entry
-            let startBalance = 10000;
-
+            // 1. Get Cash Balance from daily_balances (current_balance)
             const { data: dailyData } = await supabase
                 .from('daily_balances')
                 .select('*')
                 .eq('date', todayStr)
                 .single();
 
-            if (dailyData && dailyData.start_balance) {
-                startBalance = dailyData.start_balance;
+            let cashBalance = 10000; // Default fallback
+            let startBalance = 10000;
+
+            if (dailyData) {
+                // current_balance represents the total equity at this moment
+                // We'll use it as our baseline
+                cashBalance = dailyData.current_balance || 10000;
+                startBalance = dailyData.start_balance || 10000;
             }
 
-            // 2. Calculate Daily Realized PnL (Closed Trades Today)
+            // 2. Get Open Positions (to calculate invested capital)
+            const { data: openTrades } = await supabase
+                .from('paper_trades')
+                .select('ticker, invested_amount, quantity, entry_price')
+                .eq('status', 'OPEN');
+
+            // For now, we'll use invested_amount as the "cost basis"
+            // In a real scenario, we'd fetch current prices and multiply by quantity
+            // But without live price feeds, we use the cost
+            const investedCapital = openTrades
+                ? openTrades.reduce((sum, t) => sum + (t.invested_amount || 0), 0)
+                : 0;
+
+            // 3. Calculate Realized PnL (Closed Trades Today)
             const { data: closedTrades } = await supabase
                 .from('paper_trades')
-                .select('final_pnl, exit_time')
+                .select('final_pnl')
                 .eq('status', 'CLOSED')
                 .gte('exit_time', startOfDay.toISOString());
 
@@ -54,30 +67,26 @@ export const usePortfolio = () => {
                 ? closedTrades.reduce((sum, t) => sum + (t.final_pnl || 0), 0)
                 : 0;
 
-            // 3. Get Invested Amount (Open Positions)
-            const { data: openTrades } = await supabase
-                .from('paper_trades')
-                .select('invested_amount')
-                .eq('status', 'OPEN');
+            // 4. Calculate Total Equity
+            // CRITICAL FIX: The issue is that cashBalance from daily_balances already includes everything
+            // So we should NOT add investedCapital on top of it
+            // Instead: totalEquity = current_balance (which is the true total)
+            // And: cashBalance (free cash) = totalEquity - investedCapital
 
-            const invested = openTrades
-                ? openTrades.reduce((sum, t) => sum + (t.invested_amount || 0), 0)
-                : 0;
+            const totalEquity = cashBalance; // This is already the total from daily_balances
+            const freeCash = Math.max(0, totalEquity - investedCapital);
 
-            // 4. Calculate Final Metrics
-            // Total Equity = Start Balance + Realized PnL + (Unrealized PnL - NOT calculated here to match user request "suma operaciones cerradas")
-            // If we want accurate Total Equity we need Unrealized too, but without live prices for all assets, we stick to Realized for the "Balance" view + Invested cost.
-            const currentEquity = startBalance + realizedPnL;
-            const available = Math.max(0, currentEquity - invested);
-            const pnlPercent = startBalance > 0 ? (realizedPnL / startBalance) * 100 : 0;
+            // 5. Daily PnL = Realized PnL from closed trades
+            // (Unrealized would require live prices which we don't have in this simple version)
+            const dailyPnL = realizedPnL;
+            const dailyPnLPercent = startBalance > 0 ? (dailyPnL / startBalance) * 100 : 0;
 
             setStats({
-                totalEquity: currentEquity,
-                dailyPnL: realizedPnL,
-                dailyPnLPercent: pnlPercent,
-                invested,
-                available,
-                cashBalance: available
+                cashBalance: freeCash,
+                investedCapital: investedCapital,
+                totalEquity: totalEquity,
+                dailyPnL: dailyPnL,
+                dailyPnLPercent: dailyPnLPercent
             });
         } catch (error) {
             console.error("Error fetching portfolio stats:", error);
@@ -88,7 +97,7 @@ export const usePortfolio = () => {
 
     useEffect(() => {
         fetchStats();
-        const interval = setInterval(fetchStats, 5000); // Poll every 5s for faster updates
+        const interval = setInterval(fetchStats, 5000); // Poll every 5s
         return () => clearInterval(interval);
     }, []);
 

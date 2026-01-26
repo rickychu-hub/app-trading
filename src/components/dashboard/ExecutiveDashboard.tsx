@@ -6,31 +6,31 @@ import IntelligenceHub from './IntelligenceHub';
 import LiveTerminal from './LiveTerminal';
 
 interface ExecutiveDashboardProps {
+    cashBalance: number;
+    investedCapital: number;
     totalEquity: number;
     dailyPnL: number;
     dailyPnLPercent: number;
-    invested: number;
-    available: number;
     loading?: boolean;
 }
 
 const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
+    cashBalance,
+    investedCapital,
     totalEquity,
     dailyPnL,
     dailyPnLPercent,
-    invested,
-    available,
     loading = false
 }) => {
     return (
         <div className="space-y-6 animate-fade-in">
             {/* 1. KEY METRICS HEADER */}
             <MarketStatusHeader
+                cashBalance={cashBalance}
+                investedCapital={investedCapital}
                 totalEquity={totalEquity}
                 dailyPnL={dailyPnL}
                 dailyPnLPercent={dailyPnLPercent}
-                invested={invested}
-                available={available}
                 loading={loading}
             />
 

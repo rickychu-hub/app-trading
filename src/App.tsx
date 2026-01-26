@@ -103,11 +103,11 @@ function App() {
 
       {activeView === 'news' ? (
         <ExecutiveDashboard
+          cashBalance={stats.cashBalance}
+          investedCapital={stats.investedCapital}
           totalEquity={stats.totalEquity}
           dailyPnL={stats.dailyPnL}
           dailyPnLPercent={stats.dailyPnLPercent}
-          invested={stats.invested}
-          available={stats.available}
           loading={loading}
         />
       ) : activeView === 'market' ? (

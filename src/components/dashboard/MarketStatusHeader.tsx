@@ -3,23 +3,24 @@ import { DollarSign, TrendingUp, TrendingDown, Activity, Wallet, Cpu } from 'luc
 
 
 interface MarketStatusHeaderProps {
+    cashBalance: number;
+    investedCapital: number;
     totalEquity: number;
     dailyPnL: number;
     dailyPnLPercent: number;
-    invested: number;
-    available: number;
     loading?: boolean;
 }
 
 const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
+    cashBalance,
+    investedCapital,
     totalEquity,
     dailyPnL,
     dailyPnLPercent,
-    invested,
-    available,
     loading = false
 }) => {
     const isPositive = dailyPnL >= 0;
+    const exposurePercent = totalEquity > 0 ? (investedCapital / totalEquity) * 100 : 0;
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -59,16 +60,34 @@ const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
                 </div>
             </div>
 
-            {/* 3. Availability */}
-            <div className="glass-panel p-4 rounded-xl border border-white/10 flex items-center gap-4">
-                <div className="p-3 bg-blue-500/10 rounded-lg text-blue-400">
-                    <Activity size={24} />
+
+            {/* 3. Exposure / Allocation */}
+            <div className="glass-panel p-4 rounded-xl border border-white/10 flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                        <Activity size={20} />
+                    </div>
+                    <p className="text-gray-400 text-xs font-bold uppercase">Exposición</p>
                 </div>
-                <div>
-                    <p className="text-gray-400 text-xs font-bold uppercase">Liquidez</p>
-                    <div className="flex flex-col">
-                        <span className="text-white font-bold">${available.toLocaleString()} <span className="text-gray-500 text-xs font-normal">Disp.</span></span>
-                        <span className="text-gray-400 text-xs">${invested.toLocaleString()} <span className="text-gray-600">Inv.</span></span>
+
+                <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                        <span className="text-gray-400">Liquidez: <span className="text-white font-bold">${loading ? '...' : cashBalance.toLocaleString()}</span></span>
+                        <span className="text-gray-400">Invertido: <span className="text-accent font-bold">${loading ? '...' : investedCapital.toLocaleString()}</span></span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-gray-800/50 rounded-full h-2 overflow-hidden">
+                        <div
+                            className="h-full bg-gradient-to-r from-accent to-blue-500 transition-all duration-500"
+                            style={{ width: `${Math.min(exposurePercent, 100)}%` }}
+                        />
+                    </div>
+
+                    <div className="text-center">
+                        <span className="text-[10px] text-gray-500">
+                            {loading ? '...' : `${exposurePercent.toFixed(1)}% en mercado`}
+                        </span>
                     </div>
                 </div>
             </div>
