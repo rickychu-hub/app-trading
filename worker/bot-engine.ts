@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
-import axios from 'axios';
-import dotenv from 'dotenv';
 // @ts-ignore
 import { RSI, EMA } from 'technicalindicators';
 import { RiskManager } from './RiskManager';
 import { NewsAuditor } from './skills/NewsAuditor';
+import { ExchangeAPI } from './utils/ExchangeAPI';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -45,32 +45,9 @@ interface Candle {
 
 // --- Analysis Services (Mirrored from Frontend) ---
 
-async function fetchCandles(symbol: string, interval: string = '1h', limit: number = 50): Promise<Candle[]> {
-    try {
-        const response = await axios.get('https://api.binance.com/api/v3/klines', {
-            params: { symbol, interval, limit },
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-        });
+// --- Analysis Services (Mirrored from Frontend) ---
 
-        return response.data.map((d: any[]) => ({
-            time: d[0],
-            open: parseFloat(d[1]),
-            high: parseFloat(d[2]),
-            low: parseFloat(d[3]),
-            close: parseFloat(d[4]),
-            volume: parseFloat(d[5]),
-        }));
-    } catch (e: any) {
-        if (e.response && (e.response.status === 418 || e.response.status === 429)) {
-            console.error(`⚠️ WAF Limit Hit (418/429) for ${symbol}. Backing off...`);
-            throw e; // Propagate to main loop for long pause
-        }
-        console.error(`⚠️ Error fetching ${symbol}:`, e.message);
-        return [];
-    }
-}
+// fetchCandles removed, using ExchangeAPI directly
 
 function calculateIndicators(candles: Candle[]) {
     const closes = candles.map(c => c.close);
@@ -158,7 +135,7 @@ async function runMarketScan() {
 
     for (const symbol of TOP_ASSETS) {
         // 1. Fetch
-        const candles = await fetchCandles(symbol);
+        const candles = await ExchangeAPI.fetchCandles(symbol);
         if (candles.length < 30) continue;
 
         // 2. Analyze
@@ -194,10 +171,6 @@ async function runMarketScan() {
         } else if (wasOversold && !isRecovering) {
             console.log(`⚠️ Watching ${symbol} (Falling Knife): RSI ${rsiCurrent.toFixed(1)} still dropping...`);
         }
-
-        // Rate Limit Protection (Avoid 429)
-        // Jitter: 2000ms + random(0-1000ms) = 2-3s delay
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
     }
 }
 
@@ -224,11 +197,9 @@ async function managePositions() {
         const symbol = trade.ticker.endsWith('USDT') ? trade.ticker : `${trade.ticker}USDT`;
 
         // 2. Get Live Price
-        // Optimization: In a real bot, we would fetch all prices properly, here we fetch one by one
-        const candles = await fetchCandles(symbol, '1m', 5); // 1m candles for fast reaction
-        if (!candles || candles.length === 0) continue;
+        const currentPrice = await ExchangeAPI.fetchPrice(symbol);
+        if (!currentPrice || currentPrice <= 0) continue;
 
-        const currentPrice = candles[candles.length - 1].close;
         const entryPrice = trade.entry_price || trade.invested_amount; // Fallback for legacy
 
         if (!entryPrice || entryPrice <= 0) continue;
@@ -326,12 +297,7 @@ async function startBot() {
 
             console.log('💤 Cycle complete. Sleeping...');
         } catch (error: any) {
-            if (error.response && (error.response.status === 418 || error.response.status === 429)) {
-                console.log("⚠️ WAF Detectado. Enfriando motores por 60 segundos...");
-                await new Promise(resolve => setTimeout(resolve, 60000));
-            } else {
-                console.error('❌ Critical Loop Error:', error);
-            }
+            console.error('❌ Critical Loop Error:', error);
         }
         await new Promise(resolve => setTimeout(resolve, LOOP_INTERVAL));
     }
