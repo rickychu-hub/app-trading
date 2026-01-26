@@ -48,7 +48,10 @@ interface Candle {
 async function fetchCandles(symbol: string, interval: string = '1h', limit: number = 50): Promise<Candle[]> {
     try {
         const response = await axios.get('https://api.binance.com/api/v3/klines', {
-            params: { symbol, interval, limit }
+            params: { symbol, interval, limit },
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
         });
 
         return response.data.map((d: any[]) => ({
@@ -59,8 +62,12 @@ async function fetchCandles(symbol: string, interval: string = '1h', limit: numb
             close: parseFloat(d[4]),
             volume: parseFloat(d[5]),
         }));
-    } catch (e) {
-        console.error(`⚠️ Error fetching ${symbol}:`, (e as any).message);
+    } catch (e: any) {
+        if (e.response && (e.response.status === 418 || e.response.status === 429)) {
+            console.error(`⚠️ WAF Limit Hit (418/429) for ${symbol}. Backing off...`);
+            throw e; // Propagate to main loop for long pause
+        }
+        console.error(`⚠️ Error fetching ${symbol}:`, e.message);
         return [];
     }
 }
@@ -189,7 +196,8 @@ async function runMarketScan() {
         }
 
         // Rate Limit Protection (Avoid 429)
-        await new Promise(resolve => setTimeout(resolve, 150)); // 150ms de pausa entre monedas.
+        // Jitter: 2000ms + random(0-1000ms) = 2-3s delay
+        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
     }
 }
 
@@ -317,8 +325,13 @@ async function startBot() {
             await runMarketScan();
 
             console.log('💤 Cycle complete. Sleeping...');
-        } catch (error) {
-            console.error('❌ Critical Loop Error:', error);
+        } catch (error: any) {
+            if (error.response && (error.response.status === 418 || error.response.status === 429)) {
+                console.log("⚠️ WAF Detectado. Enfriando motores por 60 segundos...");
+                await new Promise(resolve => setTimeout(resolve, 60000));
+            } else {
+                console.error('❌ Critical Loop Error:', error);
+            }
         }
         await new Promise(resolve => setTimeout(resolve, LOOP_INTERVAL));
     }
