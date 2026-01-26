@@ -36,6 +36,7 @@ const PaperTradingPanel: React.FC = () => {
     const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
     const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
     const [isChartOpen, setIsChartOpen] = useState(false);
+    const [dailyStats, setDailyStats] = useState<{ pnl: number, status: any } | null>(null);
 
     const fetchTrades = async () => {
         setLoading(true);
@@ -52,6 +53,18 @@ const PaperTradingPanel: React.FC = () => {
             }
             if (error) {
                 console.error("Supabase error fetching trades:", error);
+            }
+
+            // Fetch Daily Stats
+            const todayStr = new Date().toISOString().split('T')[0];
+            const { data: dailyData } = await supabase
+                .from('daily_balances')
+                .select('pnl_daily, status')
+                .eq('date', todayStr)
+                .single();
+
+            if (dailyData) {
+                setDailyStats({ pnl: dailyData.pnl_daily, status: dailyData.status });
             }
         } catch (error) {
             console.error("Error fetching trades:", error);
@@ -303,6 +316,8 @@ const PaperTradingPanel: React.FC = () => {
             <PortfolioStats
                 investedCapital={metrics.invested}
                 currentValue={metrics.current}
+                dailyPnL={dailyStats?.pnl || 0}
+                botStatus={dailyStats?.status || 'ACTIVE'}
             />
 
             <AIPortfolioInsights trades={trades} currentPrices={currentPrices} />

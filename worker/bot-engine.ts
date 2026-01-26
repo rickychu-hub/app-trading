@@ -3,6 +3,7 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 // @ts-ignore
 import { RSI, EMA } from 'technicalindicators';
+import { RiskManager } from './RiskManager';
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+let globalUnrealizedPnL = 0; // Track aggregate performance of open positions
 
 const TOP_ASSETS = [
     // 1. Los Reyes (Seguridad y Volumen)
@@ -133,7 +135,16 @@ async function executeTrade(ticker: string, price: number, amount: number) {
 }
 
 async function runMarketScan() {
-    console.log(`\n🔎 Scanning Market [${new Date().toISOString()}]...`);
+    // 0. Safety Check via Risk Manager
+    const riskStatus = await RiskManager.getInstance().checkTradeStatus(globalUnrealizedPnL);
+
+    if (!riskStatus.canTrade) {
+        console.warn(`🛑 MARKET SCAN SKIPPED: ${riskStatus.reason}`);
+        console.log(`📉 Daily PnL: $${riskStatus.dailyPnL.toFixed(2)} (${riskStatus.dailyPnLPercent.toFixed(2)}%)`);
+        return;
+    }
+
+    console.log(`\n🔎 Scanning Market [${new Date().toISOString()}]... (Risk Status: OK)`);
 
     for (const symbol of TOP_ASSETS) {
         // 1. Fetch
@@ -180,7 +191,12 @@ async function managePositions() {
         .select('*')
         .eq('status', 'OPEN');
 
-    if (error || !openTrades || openTrades.length === 0) return;
+    if (error || !openTrades || openTrades.length === 0) {
+        globalUnrealizedPnL = 0;
+        return;
+    }
+
+    let currentLoopPnL = 0;
 
     for (const trade of openTrades) {
         // Normalize Ticker to match Binance format (e.g. BTC -> BTCUSDT)
@@ -263,7 +279,13 @@ async function managePositions() {
             } else {
                 console.log(`✅ Trade ${trade.id} CLOSED successfully.`);
             }
+            if (!shouldSell) {
+                currentLoopPnL += (currentPrice - entryPrice) * (trade.quantity || 0);
+            }
         }
+
+        globalUnrealizedPnL = currentLoopPnL;
+        // console.log(`💰 Current Floating PnL: $${globalUnrealizedPnL.toFixed(2)}`);
     }
 }
 
