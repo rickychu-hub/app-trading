@@ -96,11 +96,6 @@ function App() {
         </p>
       </div>
 
-      import ExecutiveDashboard from './components/dashboard/ExecutiveDashboard';
-
-      // ... (keep other imports)
-
-      // Inside App component return:
       {activeView === 'news' ? (
         <ExecutiveDashboard />
       ) : activeView === 'market' ? (
