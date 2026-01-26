@@ -8,8 +8,7 @@ import SettingsPanel from './components/dashboard/SettingsPanel';
 import { supabase } from './lib/supabaseClient';
 import { notificationService } from './services/notificationService';
 import AnalyticsPanel from './components/dashboard/AnalyticsPanel';
-import StrategyMonitor from './components/dashboard/StrategyMonitor';
-import MarketScannerPanel from './components/dashboard/MarketScannerPanel';
+import ExecutiveDashboard from './components/dashboard/ExecutiveDashboard';
 import type { NewsItem } from './data/mockData';
 import { formatQuantity } from './utils/tradeUtils';
 
@@ -97,45 +96,13 @@ function App() {
         </p>
       </div>
 
+      import ExecutiveDashboard from './components/dashboard/ExecutiveDashboard';
+
+      // ... (keep other imports)
+
+      // Inside App component return:
       {activeView === 'news' ? (
-        <div className="space-y-6">
-          <StrategyMonitor onExecuteTrade={async (side, price, reason, ticker, amount) => {
-            // Auto-Trade Implementation
-            const investAmount = amount || 1000; // Use input amount or fallback
-            // const quantity .... (rest is same, but I need to recalc quantity)
-            const quantity = parseFloat(formatQuantity(investAmount / price));
-            const cleanTicker = (ticker || 'BTCUSDT').replace('$', '').trim().toUpperCase();
-
-            try {
-              const { error } = await supabase.from('paper_trades').insert([{
-                ticker: cleanTicker,
-                entry_price: price,
-                invested_amount: investAmount,
-                quantity,
-                initial_score: 0,
-                status: 'OPEN',
-              }]);
-
-              if (!error) {
-                notificationService.sendAlert({
-                  event: "TRADE_OPEN",
-                  ticker,
-                  price,
-                  size: investAmount,
-                  message: `BOT: ${side} Executed @ $${price} (${reason})`
-                });
-
-                console.log("Auto-trade executed successfully");
-              } else {
-                throw new Error(error.message);
-              }
-            } catch (err: any) {
-              console.error("Auto-trade failed", err);
-              throw err;
-            }
-          }} />
-          <MarketScannerPanel onAutoBuy={(ticker, price) => handleConfirmTrade(ticker, price.toString(), "1000")} />
-        </div>
+        <ExecutiveDashboard />
       ) : activeView === 'market' ? (
         <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
       ) : activeView === 'portfolio' ? (
