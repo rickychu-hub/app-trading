@@ -61,7 +61,7 @@ const DailyPerformanceChart: React.FC<Props> = ({ data }) => {
                     <Tooltip
                         contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '8px', color: '#F3F4F6' }}
                         itemStyle={{ color: '#F3F4F6' }}
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, 'Balance Total']}
+                        formatter={(value: any) => [`$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Balance Total']}
                         labelFormatter={(label) => format(new Date(label), 'EEEE, d MMMM yyyy', { locale: es })}
                     />
                     <Area
