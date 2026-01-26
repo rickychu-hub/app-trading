@@ -69,13 +69,18 @@ const PortfolioStats: React.FC<PortfolioStatsProps> = ({
             </div>
 
             {/* 4. Total PnL (Legacy) */}
-            <div className="glass-card p-6 rounded-xl border border-white/10 relative overflow-hidden group opacity-80">
+            <div className={`glass-card p-6 rounded-xl border relative overflow-hidden group opacity-80 ${isProfitable ? 'border-green-500/20' : 'border-red-500/20'}`}>
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <p className="text-gray-400 text-sm font-medium">PnL Total Op.</p>
-                        <h3 className={`text-2xl font-bold mt-1 font-mono ${totalPnL >= 0 ? 'text-green-300' : 'text-red-300'}`}>
-                            {totalPnL >= 0 ? '+' : ''}{totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </h3>
+                        <div className="flex flex-col items-start">
+                            <h3 className={`text-2xl font-bold mt-1 font-mono ${isProfitable ? 'text-green-300' : 'text-red-300'}`}>
+                                {isProfitable ? '+' : ''}{totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </h3>
+                            <span className={`text-xs font-bold px-1.5 py-0.5 mt-1 rounded ${isProfitable ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                {isProfitable ? '+' : ''}{totalPnLPercent.toFixed(2)}%
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
