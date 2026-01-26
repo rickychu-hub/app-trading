@@ -134,6 +134,7 @@ async function runMarketScan() {
     console.log(`\n🔎 Scanning Market [${new Date().toISOString()}]... (Risk Status: OK)`);
 
     for (const symbol of TOP_ASSETS) {
+        console.log(`⏳ Processing ${symbol}...`);
         // 1. Fetch
         const candles = await ExchangeAPI.fetchCandles(symbol);
         if (candles.length < 30) continue;
@@ -193,6 +194,7 @@ async function managePositions() {
     let currentLoopPnL = 0;
 
     for (const trade of openTrades) {
+        console.log(`⏳ Checking trade ${trade.ticker} (ID: ${trade.id})...`);
         // Normalize Ticker to match Binance format (e.g. BTC -> BTCUSDT)
         const symbol = trade.ticker.endsWith('USDT') ? trade.ticker : `${trade.ticker}USDT`;
 
