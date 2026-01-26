@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 // @ts-ignore
-import { RSI, EMA } from 'technicalindicators';
+import { RSI, EMA, ATR } from 'technicalindicators';
 import { RiskManager } from './RiskManager';
 import { NewsAuditor } from './skills/NewsAuditor';
 import { ExchangeAPI } from './utils/ExchangeAPI';
@@ -51,6 +51,8 @@ interface Candle {
 
 function calculateIndicators(candles: Candle[]) {
     const closes = candles.map(c => c.close);
+    const highs = candles.map(c => c.high);
+    const lows = candles.map(c => c.low);
 
     // EMA 9 & 21
     const emaFastInput = { values: closes, period: 9 };
@@ -59,9 +61,13 @@ function calculateIndicators(candles: Candle[]) {
     // RSI 14
     const rsiInput = { values: closes, period: 14 };
 
+    // ATR 14 (for Volatility Guard)
+    const atrInput = { high: highs, low: lows, close: closes, period: 14 };
+
     const emaFast = EMA.calculate(emaFastInput);
     const emaSlow = EMA.calculate(emaSlowInput);
     const rsi = RSI.calculate(rsiInput);
+    const atr = ATR.calculate(atrInput);
 
     // Get latest values (last index) & Previous
     return {
@@ -71,7 +77,8 @@ function calculateIndicators(candles: Candle[]) {
         emaSlow: emaSlow[emaSlow.length - 1] || 0,
         rsiCurrent: rsi[rsi.length - 1] || 50,
         rsiPrevious: rsi[rsi.length - 2] || 50,
-        ema200: EMA.calculate({ period: 200, values: closes })
+        ema200: EMA.calculate({ period: 200, values: closes }),
+        atr: atr
     };
 }
 
@@ -134,6 +141,30 @@ async function runMarketScan() {
 
     console.log(`\n🔎 Scanning Market [${new Date().toISOString()}]... (Risk Status: OK)`);
 
+    // ========================================
+    // THE KING'S MOOD - BTC Sentiment Check
+    // ========================================
+    console.log('\n👑 Checking The King\'s Mood (BTC)...');
+    const btcCandles = await ExchangeAPI.fetchCandles('BTCUSDT', '1h', 50);
+
+    if (btcCandles.length >= 2) {
+        const btcCurrentPrice = btcCandles[btcCandles.length - 1].close;
+        const btcPreviousPrice = btcCandles[btcCandles.length - 2].close;
+        const btcChange1h = ((btcCurrentPrice - btcPreviousPrice) / btcPreviousPrice) * 100;
+
+        console.log(`📊 BTC: $${btcCurrentPrice.toFixed(2)} | 1h Change: ${btcChange1h.toFixed(2)}%`);
+
+        if (btcChange1h < -1.0) {
+            console.log(`👑 BTC is dumping (${btcChange1h.toFixed(2)}%). Freezing all buys. 🚫`);
+            console.log(`⏸️  Market scan aborted. Waiting for BTC recovery...\n`);
+            return; // Skip entire scan cycle
+        } else {
+            console.log(`✅ BTC sentiment: ${btcChange1h >= 0 ? 'Bullish' : 'Neutral'}. Proceeding with scan.\n`);
+        }
+    } else {
+        console.log('⚠️  Unable to fetch BTC data. Proceeding with caution...\n');
+    }
+
     for (const symbol of TOP_ASSETS) {
         console.log(`⏳ Processing ${symbol}...`);
         // 1. Fetch
@@ -141,10 +172,11 @@ async function runMarketScan() {
         if (candles.length < 30) continue;
 
         // 2. Analyze
-        const { price, prevPrice, rsiCurrent, rsiPrevious, ema200 } = calculateIndicators(candles);
+        const { price, prevPrice, rsiCurrent, rsiPrevious, ema200, atr } = calculateIndicators(candles);
         const lastEma200 = ema200[ema200.length - 1];
+        const currentATR = atr[atr.length - 1] || 0;
 
-        console.log(`📊 ${symbol}: Price $${price.toFixed(2)} | RSI ${rsiCurrent.toFixed(2)} | EMA200 $${lastEma200 ? lastEma200.toFixed(2) : 'N/A'}`);
+        console.log(`📊 ${symbol}: Price $${price.toFixed(2)} | RSI ${rsiCurrent.toFixed(2)} | EMA200 $${lastEma200 ? lastEma200.toFixed(2) : 'N/A'} | ATR ${currentATR.toFixed(2)}`);
 
         // 3. Trend Compass Filter (EMA 200)
         if (lastEma200) {
@@ -174,6 +206,24 @@ async function runMarketScan() {
         // 4. Decision
         if (wasOversold && isRecovering && isGreenCandle) {
             console.log(`✅ TECHNICAL FILTER PASSED: ${logMsg}`);
+
+            // ========================================
+            // VOLATILITY GUARD - ATR-Based Stop Loss
+            // ========================================
+            const atrMultiplier = 2.0; // 2x ATR for stop loss
+            const stopLossPrice = price - (currentATR * atrMultiplier);
+            const stopLossPercent = ((price - stopLossPrice) / price) * 100;
+
+            // Take Profit: 1.5x the risk distance
+            const riskDistance = price - stopLossPrice;
+            const takeProfitPrice = price + (riskDistance * 1.5);
+            const takeProfitPercent = ((takeProfitPrice - price) / price) * 100;
+
+            console.log(`🛡️ VOLATILITY GUARD:`);
+            console.log(`   ATR: $${currentATR.toFixed(2)}`);
+            console.log(`   Stop Loss: $${stopLossPrice.toFixed(2)} (-${stopLossPercent.toFixed(2)}%)`);
+            console.log(`   Take Profit: $${takeProfitPrice.toFixed(2)} (+${takeProfitPercent.toFixed(2)}%)`);
+            console.log(`   Risk/Reward: 1:1.5`);
 
             // Phase 2: News Audit (Qualitative Check)
             const newsAnalysis = await NewsAuditor.analyzeSentiment(symbol);
