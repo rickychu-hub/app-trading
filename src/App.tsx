@@ -13,9 +13,10 @@ import type { NewsItem } from './data/mockData';
 import { formatQuantity } from './utils/tradeUtils';
 
 import { usePortfolio } from './hooks/usePortfolio';
+import NewsPage from './pages/NewsPage';
 
 function App() {
-  const [activeView, setActiveView] = useState<'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics'>('news');
+  const [activeView, setActiveView] = useState<'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics' | 'newspage'>('news');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
@@ -109,6 +110,7 @@ function App() {
           dailyPnL={stats.dailyPnL}
           dailyPnLPercent={stats.dailyPnLPercent}
           loading={loading}
+          onViewAllNews={() => setActiveView('newspage')}
         />
       ) : activeView === 'market' ? (
         <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
@@ -118,6 +120,8 @@ function App() {
         <TradingJournalPanel />
       ) : activeView === 'analytics' ? (
         <AnalyticsPanel />
+      ) : activeView === 'newspage' ? (
+        <NewsPage />
       ) : (
         <SettingsPanel />
       )}

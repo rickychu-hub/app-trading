@@ -2,20 +2,43 @@ import React from 'react';
 import { LayoutDashboard, Briefcase, Settings, FileText, FlaskConical, Newspaper } from 'lucide-react';
 
 interface SidebarProps {
-    activeView: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics';
-    onViewChange: (view: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
+    activeView: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics' | 'newspage';
+    onViewChange: (view: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics' | 'newspage') => void;
+    isMobile?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isMobile = false }) => {
     const navItems = [
         { icon: LayoutDashboard, label: "Dashboard", id: 'news', active: activeView === 'news' },
-        { icon: Newspaper, label: "Mercado", id: 'market', active: activeView === 'market' },
+        { icon: Newspaper, label: "Noticias", id: 'newspage', active: activeView === 'newspage' },
         { icon: Briefcase, label: "Portfolio", id: 'portfolio', active: activeView === 'portfolio' },
         { icon: FlaskConical, label: "Analytics", id: 'analytics', active: activeView === 'analytics' },
         { icon: FileText, label: "Diario", id: 'journal', active: activeView === 'journal' },
         { icon: Settings, label: "Config", id: 'settings', active: activeView === 'settings' },
     ];
 
+    if (isMobile) {
+        // Mobile: Full width list with labels
+        return (
+            <nav className="flex flex-col gap-2 p-4 mt-4">
+                {navItems.map((item, index) => (
+                    <button
+                        key={index}
+                        onClick={() => item.id ? onViewChange(item.id as any) : null}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 ${item.active
+                                ? 'bg-accent text-black font-bold'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                            }`}
+                    >
+                        <item.icon size={20} />
+                        <span className="text-sm">{item.label}</span>
+                    </button>
+                ))}
+            </nav>
+        );
+    }
+
+    // Desktop: Icon-only sidebar
     return (
         <aside className="fixed left-0 top-0 h-screen w-20 bg-[#0b1d16]/95 backdrop-blur-xl border-r border-white/10 flex flex-col items-center py-8 z-50">
             <div className="mb-12">

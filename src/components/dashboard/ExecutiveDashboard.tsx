@@ -1,7 +1,7 @@
 
 import React from 'react';
 import MarketStatusHeader from './MarketStatusHeader';
-import ScannerWidget from './ScannerWidget';
+import MarketOverview from './MarketOverview';
 import IntelligenceHub from './IntelligenceHub';
 import LiveTerminal from './LiveTerminal';
 
@@ -12,6 +12,7 @@ interface ExecutiveDashboardProps {
     dailyPnL: number;
     dailyPnLPercent: number;
     loading?: boolean;
+    onViewAllNews?: () => void;
 }
 
 const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
@@ -20,7 +21,8 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     totalEquity,
     dailyPnL,
     dailyPnLPercent,
-    loading = false
+    loading = false,
+    onViewAllNews
 }) => {
     return (
         <div className="space-y-6 animate-fade-in">
@@ -34,21 +36,21 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 loading={loading}
             />
 
-            {/* 2. BENTO GRID */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[600px]">
+            {/* 2. BENTO GRID - Mobile: Column, Desktop: Grid */}
+            <div className="flex flex-col lg:grid lg:grid-cols-4 gap-4 lg:gap-6">
 
-                {/* LEFT: SCANNER (1 Col) */}
-                <div className="lg:col-span-1 h-full">
-                    <ScannerWidget />
+                {/* MARKET OVERVIEW - Mobile: Order 1, Desktop: Left (1 Col) */}
+                <div className="w-full lg:col-span-1 h-[400px] lg:h-[600px]">
+                    <MarketOverview />
                 </div>
 
-                {/* CENTER: INTELLIGENCE (2 Cols) */}
-                <div className="lg:col-span-2 h-full">
-                    <IntelligenceHub />
+                {/* INTELLIGENCE HUB - Mobile: Order 2, Desktop: Center (2 Cols) */}
+                <div className="w-full lg:col-span-2 h-[500px] lg:h-[600px]">
+                    <IntelligenceHub onViewAllClick={onViewAllNews} />
                 </div>
 
-                {/* RIGHT: TERMINAL (1 Col) */}
-                <div className="lg:col-span-1 h-full">
+                {/* LIVE TERMINAL - Mobile: Order 3, Desktop: Right (1 Col) */}
+                <div className="w-full lg:col-span-1 h-[300px] lg:h-[600px]">
                     <LiveTerminal />
                 </div>
             </div>

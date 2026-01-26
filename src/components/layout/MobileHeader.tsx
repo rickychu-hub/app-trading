@@ -3,8 +3,8 @@ import { useStrategyStore } from '../../store/strategyStore';
 import { usePortfolioEquity } from '../../hooks/usePortfolioEquity';
 
 interface MobileHeaderProps {
-    activeView: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics';
-    onViewChange: (view: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics') => void;
+    activeView: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics' | 'newspage';
+    onViewChange: (view: 'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics' | 'newspage') => void;
 }
 
 const EquityDisplay = () => {
