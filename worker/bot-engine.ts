@@ -4,6 +4,7 @@ import { RSI, EMA, ATR } from 'technicalindicators';
 import { RiskManager } from './RiskManager';
 import { NewsAuditor } from './skills/NewsAuditor';
 import { ExchangeAPI } from './utils/ExchangeAPI';
+import { telegramService } from './utils/TelegramService';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -84,7 +85,15 @@ function calculateIndicators(candles: Candle[]) {
 
 // --- Trading Logic ---
 
-async function executeTrade(ticker: string, price: number, amount: number, sentimentScore: number = 0, newsSummary: string = '') {
+async function executeTrade(
+    ticker: string,
+    price: number,
+    amount: number,
+    sentimentScore: number = 0,
+    newsSummary: string = '',
+    stopLossPrice?: number,
+    takeProfitPrice?: number
+) {
     if (!price || price <= 0) {
         console.warn(`⚠️ SKIPPING BUY: Invalid Price $${price} for ${ticker}`);
         return;
@@ -125,8 +134,31 @@ async function executeTrade(ticker: string, price: number, amount: number, senti
         news_summary: newsSummary
     }]);
 
-    if (error) console.error(`❌ DB Insert Error for ${cleanTicker}:`, error.message);
-    else console.log(`🚀 BUY EXECUTED: ${cleanTicker} @ $${price}`);
+    if (error) {
+        console.error(`❌ DB Insert Error for ${cleanTicker}:`, error.message);
+    } else {
+        console.log(`🚀 BUY EXECUTED: ${cleanTicker} @ $${price}`);
+
+        // Send Telegram notification
+        let details = `<b>Cantidad:</b> ${quantity.toFixed(4)} ${cleanTicker}\n` +
+            `<b>Inversión:</b> $${amount.toFixed(2)}`;
+
+        if (stopLossPrice) {
+            const slPercent = ((price - stopLossPrice) / price) * 100;
+            details += `\n<b>Stop Loss:</b> $${stopLossPrice.toFixed(2)} (-${slPercent.toFixed(2)}%)`;
+        }
+
+        if (takeProfitPrice) {
+            const tpPercent = ((takeProfitPrice - price) / price) * 100;
+            details += `\n<b>Take Profit:</b> $${takeProfitPrice.toFixed(2)} (+${tpPercent.toFixed(2)}%)`;
+        }
+
+        if (sentimentScore !== 0) {
+            details += `\n<b>Sentiment Score:</b> ${sentimentScore.toFixed(2)}`;
+        }
+
+        await telegramService.notifyTrade('BUY', cleanTicker, price, details);
+    }
 }
 
 async function runMarketScan() {
@@ -157,6 +189,15 @@ async function runMarketScan() {
         if (btcChange1h < -1.0) {
             console.log(`👑 BTC is dumping (${btcChange1h.toFixed(2)}%). Freezing all buys. 🚫`);
             console.log(`⏸️  Market scan aborted. Waiting for BTC recovery...\n`);
+
+            // Send Telegram alert
+            await telegramService.notifyAlert(
+                'BTC Dumping - Trading Paused',
+                `👑 Bitcoin está cayendo <b>${btcChange1h.toFixed(2)}%</b> en la última hora.\n\n` +
+                `Todas las compras están congeladas hasta que BTC se recupere.\n\n` +
+                `<b>Precio BTC:</b> $${btcCurrentPrice.toFixed(2)}`
+            );
+
             return; // Skip entire scan cycle
         } else {
             console.log(`✅ BTC sentiment: ${btcChange1h >= 0 ? 'Bullish' : 'Neutral'}. Proceeding with scan.\n`);
@@ -234,7 +275,7 @@ async function runMarketScan() {
             }
 
             console.log(`🚀 EXECUTING BUY: Sentiment Validated (${newsAnalysis.score}).`);
-            await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.summary);
+            await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.summary, stopLossPrice, takeProfitPrice);
         } else if (wasOversold && !isRecovering) {
             console.log(`⚠️ Watching ${symbol} (Falling Knife): RSI ${rsiCurrent.toFixed(1)} still dropping...`);
         }
@@ -355,6 +396,10 @@ async function startBot() {
     console.log('🤖 Headless Bot Worker Started...');
     console.log("🧠 NewsAI: Online & Ready");
     console.log(`Targeting: ${TOP_ASSETS.join(', ')}`);
+
+    // Send startup notification
+    await telegramService.notifyStartup('EMA200 + ATR + BTC Protection + News Sentiment');
+
 
     while (true) {
         try {
