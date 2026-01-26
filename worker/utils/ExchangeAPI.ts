@@ -102,7 +102,7 @@ export class ExchangeAPI {
     /**
      * Fetch Candles for Analysis (Full set)
      */
-    public static async fetchCandles(symbol: string, interval: string = '1h', limit: number = 50): Promise<Candle[]> {
+    public static async fetchCandles(symbol: string, interval: string = '1h', limit: number = 300): Promise<Candle[]> {
         // 1. Mandatory Jitter Delay (3s to 5s)
         const delay = 3000 + Math.random() * 2000;
         await new Promise(r => setTimeout(r, delay));

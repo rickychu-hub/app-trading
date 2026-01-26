@@ -70,7 +70,8 @@ function calculateIndicators(candles: Candle[]) {
         emaFast: emaFast[emaFast.length - 1] || 0,
         emaSlow: emaSlow[emaSlow.length - 1] || 0,
         rsiCurrent: rsi[rsi.length - 1] || 50,
-        rsiPrevious: rsi[rsi.length - 2] || 50
+        rsiPrevious: rsi[rsi.length - 2] || 50,
+        ema200: EMA.calculate({ period: 200, values: closes })
     };
 }
 
@@ -140,7 +141,22 @@ async function runMarketScan() {
         if (candles.length < 30) continue;
 
         // 2. Analyze
-        const { price, prevPrice, rsiCurrent, rsiPrevious } = calculateIndicators(candles);
+        const { price, prevPrice, rsiCurrent, rsiPrevious, ema200 } = calculateIndicators(candles);
+        const lastEma200 = ema200[ema200.length - 1];
+
+        console.log(`📊 ${symbol}: Price $${price.toFixed(2)} | RSI ${rsiCurrent.toFixed(2)} | EMA200 $${lastEma200 ? lastEma200.toFixed(2) : 'N/A'}`);
+
+        // 3. Trend Compass Filter (EMA 200)
+        if (lastEma200) {
+            if (price < lastEma200) {
+                console.log(`🐻 Bearish Trend (Price < EMA200). Skipping trade for ${symbol}.`);
+                continue;
+            } else {
+                console.log(`🐂 Bullish Trend Confirmed. Proceeding...`);
+            }
+        } else {
+            console.log(`⚠️ Not enough data for EMA200. Proceeding with caution...`);
+        }
 
         // 3. Logic: RSI Crossover (Dip Buying with Confirmation)
         // Condition A: Previous RSI was < 30 (Oversold)

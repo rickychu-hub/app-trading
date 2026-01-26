@@ -20,7 +20,7 @@ function App() {
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
   // Fetch real portfolio stats
-  const { stats } = usePortfolio();
+  const { stats, loading } = usePortfolio();
 
   const handleSimulateTrade = (item: NewsItem) => {
     setSelectedNews(item);
@@ -108,6 +108,7 @@ function App() {
           dailyPnLPercent={stats.dailyPnLPercent}
           invested={stats.invested}
           available={stats.available}
+          loading={loading}
         />
       ) : activeView === 'market' ? (
         <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />

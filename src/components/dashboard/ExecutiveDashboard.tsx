@@ -11,6 +11,7 @@ interface ExecutiveDashboardProps {
     dailyPnLPercent: number;
     invested: number;
     available: number;
+    loading?: boolean;
 }
 
 const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
@@ -18,7 +19,8 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     dailyPnL,
     dailyPnLPercent,
     invested,
-    available
+    available,
+    loading = false
 }) => {
     return (
         <div className="space-y-6 animate-fade-in">
@@ -29,6 +31,7 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 dailyPnLPercent={dailyPnLPercent}
                 invested={invested}
                 available={available}
+                loading={loading}
             />
 
             {/* 2. BENTO GRID */}

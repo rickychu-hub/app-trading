@@ -8,6 +8,7 @@ interface MarketStatusHeaderProps {
     dailyPnLPercent: number;
     invested: number;
     available: number;
+    loading?: boolean;
 }
 
 const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
@@ -15,11 +16,9 @@ const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
     dailyPnL,
     dailyPnLPercent,
     invested,
-    available
+    available,
+    loading = false
 }) => {
-    // Internal state removed, using props
-
-
     const isPositive = dailyPnL >= 0;
 
     return (
@@ -35,7 +34,7 @@ const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
                 <div>
                     <p className="text-gray-400 text-xs font-bold uppercase">Capital Total</p>
                     <h3 className="text-2xl font-bold text-white tracking-tight">
-                        ${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {loading ? '...' : `$${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                     </h3>
                 </div>
             </div>
@@ -46,14 +45,16 @@ const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
                     {isPositive ? <TrendingUp size={24} className="text-green-500" /> : <TrendingDown size={24} className="text-red-500" />}
                 </div>
                 <div>
-                    <p className="text-gray-400 text-xs font-bold uppercase">PnL Diario</p>
+                    <p className="text-gray-400 text-xs font-bold uppercase">PnL Hoy</p>
                     <div className="flex items-end gap-2">
                         <h3 className={`text-2xl font-bold tracking-tight ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                            {isPositive ? '+' : ''}${dailyPnL.toLocaleString()}
+                            {loading ? '...' : `${isPositive ? '+' : ''}$${dailyPnL.toLocaleString()}`}
                         </h3>
-                        <span className={`text-xs mb-1 font-bold ${isPositive ? 'text-green-500/80' : 'text-red-500/80'}`}>
-                            ({isPositive ? '+' : ''}{dailyPnLPercent.toFixed(2)}%)
-                        </span>
+                        {!loading && (
+                            <span className={`text-xs mb-1 font-bold ${isPositive ? 'text-green-500/80' : 'text-red-500/80'}`}>
+                                ({isPositive ? '+' : ''}{dailyPnLPercent.toFixed(2)}%)
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
