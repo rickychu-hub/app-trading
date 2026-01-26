@@ -12,10 +12,15 @@ import ExecutiveDashboard from './components/dashboard/ExecutiveDashboard';
 import type { NewsItem } from './data/mockData';
 import { formatQuantity } from './utils/tradeUtils';
 
+import { usePortfolio } from './hooks/usePortfolio';
+
 function App() {
   const [activeView, setActiveView] = useState<'news' | 'market' | 'portfolio' | 'journal' | 'settings' | 'analytics'>('news');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+
+  // Fetch real portfolio stats
+  const { stats } = usePortfolio();
 
   const handleSimulateTrade = (item: NewsItem) => {
     setSelectedNews(item);
@@ -97,7 +102,13 @@ function App() {
       </div>
 
       {activeView === 'news' ? (
-        <ExecutiveDashboard />
+        <ExecutiveDashboard
+          totalEquity={stats.totalEquity}
+          dailyPnL={stats.dailyPnL}
+          dailyPnLPercent={stats.dailyPnLPercent}
+          invested={stats.invested}
+          available={stats.available}
+        />
       ) : activeView === 'market' ? (
         <NewsIntelligencePanel onSimulateTrade={handleSimulateTrade} />
       ) : activeView === 'portfolio' ? (

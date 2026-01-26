@@ -5,11 +5,31 @@ import ScannerWidget from './ScannerWidget';
 import IntelligenceHub from './IntelligenceHub';
 import LiveTerminal from './LiveTerminal';
 
-const ExecutiveDashboard: React.FC = () => {
+interface ExecutiveDashboardProps {
+    totalEquity: number;
+    dailyPnL: number;
+    dailyPnLPercent: number;
+    invested: number;
+    available: number;
+}
+
+const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
+    totalEquity,
+    dailyPnL,
+    dailyPnLPercent,
+    invested,
+    available
+}) => {
     return (
         <div className="space-y-6 animate-fade-in">
             {/* 1. KEY METRICS HEADER */}
-            <MarketStatusHeader />
+            <MarketStatusHeader
+                totalEquity={totalEquity}
+                dailyPnL={dailyPnL}
+                dailyPnLPercent={dailyPnLPercent}
+                invested={invested}
+                available={available}
+            />
 
             {/* 2. BENTO GRID */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[600px]">

@@ -39,7 +39,7 @@ const LiveTerminal: React.FC = () => {
             <h3 className="text-sm font-bold text-gray-500 uppercase mb-2 flex items-center gap-2">
                 <Terminal size={14} /> System Logs
             </h3>
-            <div className="flex-1 overflow-y-auto custom-scrollbar font-mono text-[10px] space-y-1 p-2">
+            <div className="flex-1 overflow-y-auto custom-scrollbar font-mono text-[10px] space-y-1 p-2 h-[300px]">
                 {logs.map((log, i) => (
                     <div key={i} className="text-green-500/80 tracking-wide">
                         <span className="text-gray-600 mr-2">{log.split(']')[0]}]</span>

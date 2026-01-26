@@ -1,58 +1,26 @@
-
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { DollarSign, TrendingUp, TrendingDown, Activity, Wallet, Cpu } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
 
-const MarketStatusHeader: React.FC = () => {
-    const [stats, setStats] = useState({
-        totalEquity: 10000,
-        dailyPnL: 0,
-        dailyPnLPercent: 0,
-        invested: 0,
-        available: 10000
-    });
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            // 1. Get Daily Snapshot
-            const todayStr = new Date().toISOString().split('T')[0];
-            const { data: dailyData } = await supabase
-                .from('daily_balances')
-                .select('*')
-                .eq('date', todayStr)
-                .single();
+interface MarketStatusHeaderProps {
+    totalEquity: number;
+    dailyPnL: number;
+    dailyPnLPercent: number;
+    invested: number;
+    available: number;
+}
 
-            // 2. Get Open Positions for Invested
-            const { data: openTrades } = await supabase
-                .from('paper_trades')
-                .select('invested_amount, entry_price')
-                .eq('status', 'OPEN');
+const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
+    totalEquity,
+    dailyPnL,
+    dailyPnLPercent,
+    invested,
+    available
+}) => {
+    // Internal state removed, using props
 
-            let invested = 0;
-            if (openTrades) {
-                invested = openTrades.reduce((sum, t) => sum + (t.invested_amount || t.entry_price || 0), 0);
-            }
 
-            if (dailyData) {
-                const currentBalance = dailyData.current_balance || 10000;
-                setStats({
-                    totalEquity: currentBalance,
-                    dailyPnL: dailyData.pnl_daily || 0,
-                    dailyPnLPercent: dailyData.percent_daily || 0,
-                    invested,
-                    available: Math.max(0, currentBalance - invested)
-                });
-            } else {
-                setStats(prev => ({ ...prev, invested, available: Math.max(0, 10000 - invested) }));
-            }
-        };
-
-        fetchStats();
-        const interval = setInterval(fetchStats, 10000); // Poll every 10s
-        return () => clearInterval(interval);
-    }, []);
-
-    const isPositive = stats.dailyPnL >= 0;
+    const isPositive = dailyPnL >= 0;
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -67,7 +35,7 @@ const MarketStatusHeader: React.FC = () => {
                 <div>
                     <p className="text-gray-400 text-xs font-bold uppercase">Capital Total</p>
                     <h3 className="text-2xl font-bold text-white tracking-tight">
-                        ${stats.totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        ${totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </h3>
                 </div>
             </div>
@@ -81,10 +49,10 @@ const MarketStatusHeader: React.FC = () => {
                     <p className="text-gray-400 text-xs font-bold uppercase">PnL Diario</p>
                     <div className="flex items-end gap-2">
                         <h3 className={`text-2xl font-bold tracking-tight ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                            {isPositive ? '+' : ''}${stats.dailyPnL.toLocaleString()}
+                            {isPositive ? '+' : ''}${dailyPnL.toLocaleString()}
                         </h3>
                         <span className={`text-xs mb-1 font-bold ${isPositive ? 'text-green-500/80' : 'text-red-500/80'}`}>
-                            ({isPositive ? '+' : ''}{stats.dailyPnLPercent.toFixed(2)}%)
+                            ({isPositive ? '+' : ''}{dailyPnLPercent.toFixed(2)}%)
                         </span>
                     </div>
                 </div>
@@ -98,8 +66,8 @@ const MarketStatusHeader: React.FC = () => {
                 <div>
                     <p className="text-gray-400 text-xs font-bold uppercase">Liquidez</p>
                     <div className="flex flex-col">
-                        <span className="text-white font-bold">${stats.available.toLocaleString()} <span className="text-gray-500 text-xs font-normal">Disp.</span></span>
-                        <span className="text-gray-400 text-xs">${stats.invested.toLocaleString()} <span className="text-gray-600">Inv.</span></span>
+                        <span className="text-white font-bold">${available.toLocaleString()} <span className="text-gray-500 text-xs font-normal">Disp.</span></span>
+                        <span className="text-gray-400 text-xs">${invested.toLocaleString()} <span className="text-gray-600">Inv.</span></span>
                     </div>
                 </div>
             </div>
