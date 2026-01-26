@@ -287,6 +287,7 @@ async function managePositions() {
 
 async function startBot() {
     console.log('🤖 Headless Bot Worker Started...');
+    console.log("🧠 NewsAI: Online & Ready");
     console.log(`Targeting: ${TOP_ASSETS.join(', ')}`);
 
     while (true) {
