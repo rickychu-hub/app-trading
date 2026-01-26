@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 // @ts-ignore
 import { RSI, EMA } from 'technicalindicators';
 import { RiskManager } from './RiskManager';
+import { NewsAuditor } from './skills/NewsAuditor';
 
 dotenv.config();
 
@@ -91,7 +92,7 @@ function calculateIndicators(candles: Candle[]) {
 
 // --- Trading Logic ---
 
-async function executeTrade(ticker: string, price: number, amount: number) {
+async function executeTrade(ticker: string, price: number, amount: number, sentimentScore: number = 0, newsSummary: string = '') {
     if (!price || price <= 0) {
         console.warn(`⚠️ SKIPPING BUY: Invalid Price $${price} for ${ticker}`);
         return;
@@ -127,7 +128,9 @@ async function executeTrade(ticker: string, price: number, amount: number) {
         quantity: quantity,
         initial_score: 90, // High score for manual confirmation strategy
         status: 'OPEN',
-        news_id: 'BOT-RSI-CROSS' // Marker for this specific strategy
+        news_id: 'BOT-RSI-CROSS', // Marker for this specific strategy
+        news_sentiment_score: sentimentScore,
+        news_summary: newsSummary
     }]);
 
     if (error) console.error(`❌ DB Insert Error for ${cleanTicker}:`, error.message);
@@ -169,8 +172,18 @@ async function runMarketScan() {
 
         // 4. Decision
         if (wasOversold && isRecovering && isGreenCandle) {
-            console.log(`✅ BUY SIGNAL (RSI Turn): ${logMsg}`);
-            await executeTrade(symbol, price, 1000);
+            console.log(`✅ TECHNICAL FILTER PASSED: ${logMsg}`);
+
+            // Phase 2: News Audit (Qualitative Check)
+            const newsAnalysis = await NewsAuditor.analyzeSentiment(symbol);
+
+            if (newsAnalysis.score < -0.5) {
+                console.log(`⛔ BUY REJECTED: News Sentiment too negative (${newsAnalysis.score}) for ${symbol}. Summary: ${newsAnalysis.summary}`);
+                continue;
+            }
+
+            console.log(`🚀 EXECUTING BUY: Sentiment Validated (${newsAnalysis.score}).`);
+            await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.summary);
         } else if (wasOversold && !isRecovering) {
             console.log(`⚠️ Watching ${symbol} (Falling Knife): RSI ${rsiCurrent.toFixed(1)} still dropping...`);
         }
