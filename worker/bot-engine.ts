@@ -21,6 +21,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 let globalUnrealizedPnL = 0; // Track aggregate performance of open positions
+let isDumpingAlertActive = false; // Track if we've already notified about BTC dumping
 
 const TOP_ASSETS = [
     // 1. Los Reyes (Seguridad y Volumen)
@@ -190,16 +191,29 @@ async function runMarketScan() {
             console.log(`👑 BTC is dumping (${btcChange1h.toFixed(2)}%). Freezing all buys. 🚫`);
             console.log(`⏸️  Market scan aborted. Waiting for BTC recovery...\n`);
 
-            // Send Telegram alert
-            await telegramService.notifyAlert(
-                'BTC Dumping - Trading Paused',
-                `👑 Bitcoin está cayendo <b>${btcChange1h.toFixed(2)}%</b> en la última hora.\n\n` +
-                `Todas las compras están congeladas hasta que BTC se recupere.\n\n` +
-                `<b>Precio BTC:</b> $${btcCurrentPrice.toFixed(2)}`
-            );
+            // Send Telegram alert ONLY if not already active
+            if (!isDumpingAlertActive) {
+                isDumpingAlertActive = true;
+                await telegramService.notifyAlert(
+                    'BTC Dumping - Trading Paused',
+                    `👑 Bitcoin está cayendo <b>${btcChange1h.toFixed(2)}%</b> en la última hora.\n\n` +
+                    `Todas las compras están congeladas hasta que BTC se recupere.\n\n` +
+                    `<b>Precio BTC:</b> $${btcCurrentPrice.toFixed(2)}`
+                );
+            }
 
             return; // Skip entire scan cycle
         } else {
+            // Check for recovery
+            if (isDumpingAlertActive) {
+                isDumpingAlertActive = false;
+                await telegramService.notifyAlert(
+                    'BTC Recovered - Trading Resumed',
+                    `✅ Bitcoin se está estabilizando (Cambio 1h: ${btcChange1h.toFixed(2)}%).\n\n` +
+                    `El escaneo de mercado y las compras se han reanudado.\n\n` +
+                    `<b>Precio BTC:</b> $${btcCurrentPrice.toFixed(2)}`
+                );
+            }
             console.log(`✅ BTC sentiment: ${btcChange1h >= 0 ? 'Bullish' : 'Neutral'}. Proceeding with scan.\n`);
         }
     } else {
@@ -379,15 +393,22 @@ async function managePositions() {
                 console.error(`❌ FAILED to close trade ${trade.id}:`, closeError.message);
             } else {
                 console.log(`✅ Trade ${trade.id} CLOSED successfully.`);
-            }
-            if (!shouldSell) {
-                currentLoopPnL += (currentPrice - entryPrice) * (trade.quantity || 0);
-            }
-        }
 
-        globalUnrealizedPnL = currentLoopPnL;
-        // console.log(`💰 Current Floating PnL: $${globalUnrealizedPnL.toFixed(2)}`);
+                // Send Telegram notification
+                const pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+                const details = `<b>PnL:</b> $${finalPnL.toFixed(2)} (${pnlPercent.toFixed(2)}%)\n` +
+                    `<b>Reason:</b> ${reason}`;
+
+                await telegramService.notifyTrade('SELL', trade.ticker, currentPrice, details);
+            }
+        } else {
+            // Only add to unrealized PnL if the position is still open
+            currentLoopPnL += (currentPrice - entryPrice) * (trade.quantity || 0);
+        }
     }
+
+    globalUnrealizedPnL = currentLoopPnL;
+    console.log(`💰 Total Unrealized PnL: $${globalUnrealizedPnL.toFixed(2)}`);
 }
 
 // --- Main Loop ---

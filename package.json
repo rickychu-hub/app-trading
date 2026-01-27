@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:worker": "tsc worker/bot-engine.ts --outDir dist/worker --target ES2020 --module CommonJS --moduleResolution node --esModuleInterop --skipLibCheck --allowSyntheticDefaultImports",
+    "build:worker": "tsc worker/bot-engine.ts --outDir dist/worker --target ES2020 --module CommonJS --moduleResolution node --esModuleInterop --skipLibCheck --allowSyntheticDefaultImports && echo {\"type\":\"commonjs\"} > dist/worker/package.json",
     "worker": "node dist/worker/bot-engine.js",
     "lint": "eslint .",
     "preview": "vite preview"
