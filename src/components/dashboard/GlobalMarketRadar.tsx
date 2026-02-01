@@ -12,16 +12,27 @@ interface MarketOpportunity {
 const GlobalMarketRadar: React.FC = () => {
     const [opportunities, setOpportunities] = useState<MarketOpportunity[]>([]);
     const [loading, setLoading] = useState(true);
+    const [status, setStatus] = useState<'ok' | 'debug_fallback' | 'empty'>('ok');
     const [search, setSearch] = useState('');
     const capitalBase = 10000;
 
     const fetchRadar = async () => {
         try {
             const resp = await fetch('/api/market-radar');
-            const data = await resp.json();
-            setOpportunities(data);
+            const result = await resp.json();
+
+            console.log(`📡 [RADAR DEBUG] API Received: ${result.data?.length || 0} assets. Status: ${result.status}`);
+
+            if (result.status === 'debug_fallback' || (result.data && result.data.length > 0)) {
+                setOpportunities(result.data);
+                setStatus(result.status);
+            } else {
+                setOpportunities([]);
+                setStatus('empty');
+            }
         } catch (error) {
-            console.error("Radar Fetch Error:", error);
+            console.error("❌ [RADAR ERROR] Fetch failed:", error);
+            setStatus('empty');
         } finally {
             setLoading(false);
         }
@@ -75,13 +86,19 @@ const GlobalMarketRadar: React.FC = () => {
                 <div>
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">
                         <Zap className="text-accent" size={20} />
-                        TOP 10 OPORTUNIDADES
+                        TOP 10 RADAR OPPORTUNITIES
                     </h2>
-                    <p className="text-sm text-gray-400 font-mono tracking-tighter">Ranking Neural Alpha: RSI(1H) + Sentimiento de Mercado</p>
+                    <p className="text-sm text-gray-400 font-mono tracking-tighter">
+                        {status === 'debug_fallback' ? (
+                            <span className="text-orange-400 animate-pulse">⚠️ Analizando mercado: Filtros actuales muy estrictos (Mostrando Top Volumen)</span>
+                        ) : (
+                            "Ranking Neural Alpha: RSI(1H) + Sentimiento de Mercado"
+                        )}
+                    </p>
                 </div>
 
                 <div className="relative flex-grow md:flex-grow-0">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                     <input
                         type="text"
                         placeholder="Filtrar ranking..."
@@ -94,13 +111,13 @@ const GlobalMarketRadar: React.FC = () => {
 
             <div className="flex-1 overflow-auto custom-scrollbar">
                 <table className="w-full text-left">
-                    <thead className="sticky top-0 bg-[#0b1d16] z-10">
-                        <tr className="text-gray-500 text-[10px] uppercase tracking-wider border-b border-white/5">
+                    <thead className="sticky top-0 bg-[#0b1d16] z-10 border-b border-white/5">
+                        <tr className="text-gray-500 text-[10px] uppercase tracking-wider">
                             <th className="pb-3 pl-2">#</th>
                             <th className="pb-3">Activo</th>
                             <th className="pb-3 text-right">Precio</th>
                             <th className="pb-3 text-center">RSI</th>
-                            <th className="pb-3 text-center">Score IA</th>
+                            <th className="pb-3 text-center">IA</th>
                             <th className="pb-3 text-right">Acción</th>
                         </tr>
                     </thead>
@@ -110,18 +127,18 @@ const GlobalMarketRadar: React.FC = () => {
                                 <td colSpan={6} className="py-20 text-center">
                                     <div className="flex flex-col items-center gap-3">
                                         <div className="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
-                                        <p className="text-sm text-gray-400 font-medium">Buscando mejores oportunidades...</p>
+                                        <p className="text-sm text-gray-400 font-medium tracking-widest">Buscando oportunidades...</p>
                                     </div>
                                 </td>
                             </tr>
                         ) : filtered.length === 0 ? (
                             <tr>
                                 <td colSpan={6} className="py-12 text-center text-gray-500 text-sm italic">
-                                    Ninguna oportunidad detectada bajo los criterios Alpha.
+                                    Ninguna oportunidad detectada. Intente relajando los términos de búsqueda.
                                 </td>
                             </tr>
                         ) : filtered.map((op, idx) => (
-                            <tr key={op.symbol} className="hover:bg-white/5 transition-colors group">
+                            <tr key={op.symbol} className={`hover:bg-white/5 transition-colors group ${op.rsi < 45 ? 'bg-accent/5' : ''}`}>
                                 <td className="py-3 pl-2">
                                     <span className={`text-[10px] font-bold ${idx < 3 ? 'text-accent' : 'text-gray-600'}`}>
                                         {idx + 1}
@@ -129,8 +146,8 @@ const GlobalMarketRadar: React.FC = () => {
                                 </td>
                                 <td className="py-3">
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-6 h-6 rounded bg-black/40 border border-white/10 flex items-center justify-center font-bold text-[10px] ${idx < 3 ? 'text-accent' : 'text-white'}`}>
-                                            {op.symbol.replace('USDT', '').substring(0, 2)}
+                                        <div className={`w-7 h-7 rounded bg-black/40 border border-white/10 flex items-center justify-center font-bold text-[10px] ${idx < 3 ? 'text-accent' : 'text-white'}`}>
+                                            {op.symbol.replace('USDT', '')}
                                         </div>
                                         <span className="font-bold text-white text-xs">{op.symbol}</span>
                                     </div>
@@ -139,14 +156,14 @@ const GlobalMarketRadar: React.FC = () => {
                                     ${op.price < 1 ? op.price.toFixed(5) : op.price.toLocaleString()}
                                 </td>
                                 <td className="py-3 text-center">
-                                    <span className={`text-xs font-mono ${op.rsi < 35 ? 'text-green-400' : 'text-gray-400'}`}>
+                                    <span className={`text-xs font-mono font-bold ${op.rsi < 45 ? 'text-green-400' : 'text-gray-500'}`}>
                                         {op.rsi.toFixed(0)}
                                     </span>
                                 </td>
                                 <td className="py-3 text-center">
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${op.sentiment_score > 0.3 ? 'text-accent bg-accent/5' :
-                                        op.sentiment_score < -0.3 ? 'text-red-500 bg-red-500/5' :
-                                            'text-gray-500'
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border border-white/10 ${op.sentiment_score > 0.2 ? 'text-accent bg-accent/5' :
+                                            op.sentiment_score < -0.2 ? 'text-red-500 bg-red-500/5' :
+                                                'text-gray-600'
                                         }`}>
                                         {op.sentiment_score > 0 ? '+' : ''}{op.sentiment_score.toFixed(1)}
                                     </span>
@@ -168,10 +185,10 @@ const GlobalMarketRadar: React.FC = () => {
             <div className="mt-4 p-3 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <ShieldCheck className="text-accent" size={14} />
-                    <span className="text-[10px] text-gray-500 uppercase">Capital Protegido: Límite $500 por activo</span>
+                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Modo Alpha v2.0</span>
                 </div>
-                <div className="text-[10px] text-gray-500 font-mono">
-                    REF: $10,000.00
+                <div className="text-[10px] text-gray-400 font-mono">
+                    Ref: $10,000 | Límite: $500
                 </div>
             </div>
         </div>

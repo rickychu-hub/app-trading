@@ -266,7 +266,8 @@ async def get_market_radar():
             sentiment = news_map.get(clean_symbol, {"score": 0})
             sentiment_score = sentiment['score']
             
-            # 60% RSI (Lower is better, so 100-RSI) + 40% Sentiment (Normalized -1..1 to 0..100)
+            # 60% RSI (Lower is better, but relaxed threshold) + 40% Sentiment
+            # If RSI is < 45, we give it a boost. 
             rsi_factor = (100 - m['rsi']) * 0.6
             sentiment_factor = (sentiment_score * 50 + 50) * 0.4
             opportunity_score = rsi_factor + sentiment_factor
@@ -274,11 +275,20 @@ async def get_market_radar():
             radar_data.append({
                 **m,
                 "sentiment_score": sentiment_score,
-                "opportunity_score": round(opportunity_score, 2)
+                "opportunity_score": round(opportunity_score, 2),
+                "is_oversold": m['rsi'] < 45
             })
             
-        # Return Top 10 by Opportunity Score
-        return sorted(radar_data, key=lambda x: x['opportunity_score'], reverse=True)[:10]
+        # Sort by score
+        ranked = sorted(radar_data, key=lambda x: x['opportunity_score'], reverse=True)
+        
+        # If TOP 10 is empty (unlikely if market_results has data), or for debugging:
+        if not ranked and market_results:
+            # Fallback to Top Volume
+            fallback = sorted(market_results, key=lambda x: x['volume_24h'], reverse=True)[:5]
+            return {"data": fallback, "status": "debug_fallback", "message": "Analizando mercado: Filtros actuales muy estrictos"}
+            
+        return {"data": ranked[:10], "status": "ok"}
 
 # Paper Trading
 class PaperTrade(BaseModel):
