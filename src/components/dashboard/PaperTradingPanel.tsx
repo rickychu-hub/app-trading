@@ -8,6 +8,7 @@ import { useBinancePrices } from '../../hooks/useBinancePrices';
 import { binanceService } from '../../services/binancePriceService';
 import { analysisService } from '../../services/analysisService';
 import { supabase } from '../../lib/supabaseClient';
+import { usePortfolio } from '../../hooks/usePortfolio';
 
 interface Trade {
     id: number;
@@ -337,12 +338,14 @@ const PaperTradingPanel: React.FC = () => {
         return <span className="text-gray-500 text-xs">Calculando...</span>;
     };
 
+    const { stats } = usePortfolio();
+
     return (
         <div className="mt-8 space-y-8 animate-fade-in">
             <PortfolioStats
                 investedCapital={metrics.invested}
-                currentValue={metrics.current}
-                dailyPnL={dailyStats?.pnl || 0}
+                currentValue={stats.totalEquity || 10000}
+                dailyPnL={stats.dailyPnL || 0}
                 botStatus={dailyStats?.status || 'ACTIVE'}
             />
 

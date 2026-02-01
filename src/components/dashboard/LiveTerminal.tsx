@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, Activity } from 'lucide-react';
+import { Terminal } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
 const LiveTerminal: React.FC = () => {
@@ -11,7 +11,7 @@ const LiveTerminal: React.FC = () => {
     const fetchRealLogs = async () => {
         try {
             // Get last 15 trades (Open or Closed)
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('paper_trades')
                 .select('*')
                 .order('created_at', { ascending: false })
@@ -78,9 +78,8 @@ const LiveTerminal: React.FC = () => {
             {/* Fixed height container with scroll */}
             <div className="h-[300px] overflow-y-auto custom-scrollbar font-mono text-[10px] space-y-1.5 p-2">
                 {logs.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-gray-600 text-xs">
-                        <Activity size={16} className="mr-2 animate-pulse" />
-                        Esperando eventos críticos...
+                    <div className="h-full flex items-center justify-center text-gray-500 text-xs text-center px-4 italic">
+                        "Sistema listo. Esperando primera operación manual o automática"
                     </div>
                 ) : (
                     logs.map((log, i) => (

@@ -15,7 +15,6 @@ const GlobalMarketRadar: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<'ok' | 'debug_fallback' | 'empty' | 'error'>('ok');
     const [search, setSearch] = useState('');
-    const capitalBase = 10000;
 
     const fetchRadar = async () => {
         try {
@@ -45,23 +44,19 @@ const GlobalMarketRadar: React.FC = () => {
         return () => clearInterval(interval);
     }, []);
 
-    const calculatePositionSize = (price: number) => {
-        // Risk limit: 5% of capital per manual trade
-        return (capitalBase * 0.05) / price;
-    };
 
-    const executeManualTrade = async (symbol: string, price: number) => {
-        const qty = calculatePositionSize(price);
-        const amount = capitalBase * 0.05;
+    const executeManualTrade = async (ticker: string, price: number) => {
+        const amount = 500; // AS REQUESTED: $500 per manual trade
+        const qty = amount / price;
 
-        if (!window.confirm(`¿Confirmar inversión inmediata en ${symbol}?\nInversión Estimada: $${amount.toFixed(2)}`)) return;
+        if (!window.confirm(`¿Confirmar inversión inmediata en ${ticker}?\nInversión Estimada: $${amount.toFixed(2)}`)) return;
 
         try {
             const resp = await fetch('/api/trades', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    ticker: symbol.replace('USDT', ''),
+                    ticker: ticker.replace('USDT', ''),
                     entry_price: price,
                     invested_amount: amount,
                     quantity: qty,
@@ -70,7 +65,7 @@ const GlobalMarketRadar: React.FC = () => {
             });
 
             if (resp.ok) {
-                alert(`🚀 ORDEN EJECUTADA: Posición abierta en ${symbol}`);
+                alert(`🚀 ORDEN EJECUTADA: Posición abierta en ${ticker}`);
             }
         } catch (e) {
             console.error("Trade Error", e);
@@ -169,8 +164,8 @@ const GlobalMarketRadar: React.FC = () => {
                                             {op.sentiment_label}
                                         </span>
                                         <span className={`text-[10px] px-1.5 py-0.5 rounded border border-white/10 ${op.sentiment_score > 0.2 ? 'text-accent bg-accent/5 border-accent/20' :
-                                                op.sentiment_score < -0.2 ? 'text-red-500 bg-red-500/5 border-red-500/20' :
-                                                    'text-gray-600'
+                                            op.sentiment_score < -0.2 ? 'text-red-500 bg-red-500/5 border-red-500/20' :
+                                                'text-gray-600'
                                             }`}>
                                             {op.sentiment_score > 0 ? '+' : ''}{op.sentiment_score.toFixed(1)}
                                         </span>
