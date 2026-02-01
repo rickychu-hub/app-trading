@@ -2,6 +2,7 @@ import os
 import httpx
 from google import genai
 import json
+import traceback
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
@@ -106,9 +107,9 @@ async def save_to_supabase(data: dict) -> bool:
     async with httpx.AsyncClient() as client:
         try:
             # Note: If Supabase columns don't exist, this might error. 
-            # Ideally the user has prepared the DB or we use a JSONB column.
-            # We attempt to send all data.
             response = await client.post(url, json=data, headers=headers)
+            if response.status_code >= 400:
+                print(f"❌ Supabase Error ({response.status_code}): {response.text}")
             response.raise_for_status()
             return True
         except Exception as e:
@@ -173,33 +174,46 @@ async def fetch_from_supabase() -> List[dict]:
 @app.post("/webhook/news")
 async def receive_news(news: Union[dict, List[dict]]):
     try:
+        print(f"DEBUG: Received webhook payload: {json.dumps(news)[:500]}...")
+        
         # Handle single item or list of items
         incoming_news = news if isinstance(news, list) else [news]
         saved_count = 0
         
         for item in incoming_news:
-            # Destructuring with fallbacks (Manual because it might be a dict or NewsItem)
-            # Supporting both standard and n8n-style field names
-            title = item.get("title") or item.get("titulo") or "Sin título"
-            summary = item.get("summary") or item.get("resumen") or "Sin resumen disponible"
-            url = item.get("url") or item.get("enlace") or ""
-            published_at = item.get("published_at") or item.get("fecha") or "now()"
-            sentiment_score = item.get("sentiment_score") or item.get("score") or 0.0
-            tickers = item.get("tickers") or item.get("companies") or []
-            veto_status = item.get("veto") or False
-
-            print(f"📡 Noticia Recibida: [{title}] (Veto: {veto_status})")
+            # Safer mapping with explicit types
+            title = str(item.get("title") or item.get("titulo") or "Sin título")
+            summary = str(item.get("summary") or item.get("resumen") or "Sin resumen disponible")
+            url = str(item.get("url") or item.get("enlace") or "")
+            published_at = str(item.get("published_at") or item.get("fecha") or "now()")
             
-            # Construct Payload for Supabase (Strict Mapping)
+            # Safe float conversion
+            try:
+                raw_score = item.get("sentiment_score") or item.get("score") or 0.0
+                sentiment_score = float(raw_score)
+            except (ValueError, TypeError):
+                sentiment_score = 0.0
+
+            tickers = item.get("tickers") or item.get("companies") or []
+            if not isinstance(tickers, list):
+                tickers = [str(tickers)]
+            else:
+                tickers = [str(t) for t in tickers]
+
+            veto_status = bool(item.get("veto", False))
+
+            print(f"📡 Processing News: [{title}] | Score: {sentiment_score} | Veto: {veto_status}")
+            
+            # Construct Payload for Supabase
             payload = {
                 "titulo": title,
                 "resumen": summary,
                 "enlace": url,
                 "fecha": published_at,
-                "sentimiento": "Positivo" if float(sentiment_score) > 0.3 else ("Negativo" if float(sentiment_score) < -0.3 else "Neutro"),
-                "score": float(sentiment_score),
-                "category": item.get("category", "Crypto"),
-                "tickers": tickers if isinstance(tickers, list) else [tickers]
+                "sentimiento": "Positivo" if sentiment_score > 0.3 else ("Negativo" if sentiment_score < -0.3 else "Neutro"),
+                "score": sentiment_score,
+                "category": str(item.get("category", "Crypto")),
+                "tickers": tickers
             }
             
             if await save_to_supabase(payload):
@@ -207,9 +221,10 @@ async def receive_news(news: Union[dict, List[dict]]):
             
         return {"status": "success", "received_count": len(incoming_news), "saved_count": saved_count}
     except Exception as e:
-        print(f"❌ Critical Error in Webhook: {e}")
-        # Return 200 to prevent n8n from failing the whole workflow
+        print(f"❌ Critical Error in Webhook: {str(e)}")
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
 
 
 @app.get("/news")
