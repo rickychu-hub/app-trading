@@ -1,38 +1,59 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, Activity } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
 
 const LiveTerminal: React.FC = () => {
     const [logs, setLogs] = useState<string[]>([]);
     const [isActive, setIsActive] = useState(true);
     const endRef = useRef<HTMLDivElement>(null);
 
+    const fetchRealLogs = async () => {
+        try {
+            // Get last 15 trades (Open or Closed)
+            const { data, error } = await supabase
+                .from('paper_trades')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(15);
+
+            if (data) {
+                const formattedLogs = data.map(trade => {
+                    const time = new Date(trade.created_at || trade.exit_time).toLocaleTimeString();
+                    if (trade.status === 'OPEN') {
+                        return `[${time}] 💰 BUY EXECUTED: ${trade.ticker} @ $${trade.entry_price.toLocaleString()}`;
+                    } else {
+                        const pnl = trade.final_pnl || 0;
+                        const pnlStr = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
+                        return `[${time}] 🛑 SELL EXECUTED: ${trade.ticker} (${trade.close_reason || 'Exit'}) | PnL: ${pnlStr}`;
+                    }
+                }).reverse();
+                setLogs(formattedLogs);
+            }
+        } catch (e) {
+            console.error("Failed to fetch real logs", e);
+        }
+    };
+
     useEffect(() => {
-        // Critical events only - filter out noise
-        const criticalEvents = [
-            "💰 BUY EXECUTED: ETHUSDT @ $2,450.00",
-            "🛑 SELL EXECUTED: BTCUSDT (Trailing Stop Hit)",
-            "🐻 Bearish Trend Detected: Market Cooling",
-            "🐂 Bullish Trend Confirmed: BTC Rising",
-            "🛡️ Stop Loss Triggered: SOLUSDT -2.5%",
-            "⚠️ Risk Limit Reached: Trading Paused",
-            "✅ Trade Closed: +$125.50 Profit",
-            "👑 BTC Dumping: All Buys Frozen"
-        ];
+        fetchRealLogs();
+
+        // Subscribe to real-time changes
+        const channel = supabase
+            .channel('paper_trades_logs')
+            .on('postgres_changes', { event: '*', table: 'paper_trades', schema: 'public' }, () => {
+                fetchRealLogs();
+            })
+            .subscribe();
 
         const interval = setInterval(() => {
-            // Simulate critical events (in production, this would come from WebSocket/API)
-            if (Math.random() > 0.7) { // 30% chance of event
-                const timestamp = new Date().toLocaleTimeString();
-                const event = criticalEvents[Math.floor(Math.random() * criticalEvents.length)];
-                setLogs(prev => [...prev.slice(-15), `[${timestamp}] ${event}`]); // Keep last 15 events
-            }
-
-            // Toggle activity indicator
             setIsActive(prev => !prev);
-        }, 4000);
+        }, 3000);
 
-        return () => clearInterval(interval);
+        return () => {
+            supabase.removeChannel(channel);
+            clearInterval(interval);
+        };
     }, []);
 
     useEffect(() => {

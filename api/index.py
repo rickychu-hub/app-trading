@@ -217,7 +217,9 @@ async def receive_news(news: Union[dict, List[dict]]):
                 "sentimiento": "Positivo" if sentiment_score > 0.3 else ("Negativo" if sentiment_score < -0.3 else "Neutro"),
                 "score": sentiment_score,
                 "category": str(item.get("category", "Crypto")),
-                "tickers": tickers
+                "tickers": tickers,
+                "veto": veto_status,
+                "reason": str(item.get("reason", ""))
             }
             if await save_to_supabase(payload):
                 saved_count += 1
@@ -236,75 +238,62 @@ async def get_news():
 async def get_market_radar():
     async with httpx.AsyncClient() as client:
         try:
-            # 1. Fetch ALL Bitget Tickers to find truly active coins
-            resp = await client.get("https://api.bitget.com/api/v2/spot/market/tickers", timeout=5.0)
+            # 1. Fetch ALL Bitget Tickers - NO FILTERS FOR DEBUGGING
+            resp = await client.get("https://api.bitget.com/api/v2/spot/market/tickers", timeout=10.0)
             if resp.status_code != 200:
-                return {"data": [], "status": "error", "message": "Error conectando con Bitget"}
+                print(f"❌ Bitget Ticker API Error: {resp.status_code}")
+                return {"data": [], "status": "error", "message": "Bitget Connection Error"}
             
-            all_tickers = resp.json().get('data', [])
-            # Sort by quoteVolume (liquid items) and filter for USDT pairs
-            liquid_tickers = [t for t in all_tickers if t.get('symbol', '').endswith('USDT')]
-            top_50 = sorted(liquid_tickers, key=lambda x: float(x.get('quoteVolume', 0)), reverse=True)[:50]
-            assets = [t['symbol'] for t in top_50]
-            
-            if not assets:
-                return {"data": [], "status": "empty", "message": "No se encontraron activos líquidos"}
+            all_data = resp.json().get('data', [])
+            # Filter for USDT pairs and ensure numeric values
+            liquid_tickers = []
+            for t in all_data:
+                sym = t.get('symbol', '')
+                if sym.endswith('USDT'):
+                    try:
+                        liquid_tickers.append({
+                            "symbol": sym,
+                            "price": float(t.get('lastPr', 0)),
+                            "volume_24h": float(t.get('quoteVolume', 0)),
+                            "high_24h": float(t.get('high24h', 0)),
+                            "low_24h": float(t.get('low24h', 0))
+                        })
+                    except: continue
 
-            # 2. Fetch market data (klines) in parallel for these top assets
-            tasks = [fetch_ticker_data(client, asset) for asset in assets]
-            market_results = await asyncio.gather(*tasks)
-            market_results = [r for r in market_results if r]
+            # Sort by volume DESC
+            top_by_vol = sorted(liquid_tickers, key=lambda x: x['volume_24h'], reverse=True)[:10]
 
-            # 3. Fetch latest sentiment from Supabase
+            if not top_by_vol:
+                return {"data": [], "status": "empty", "message": "No assets found"}
+
+            # 2. Add News/Sentiment if available (Optional Join)
             latest_news = await fetch_from_supabase()
-            news_map = {}
-            for n in latest_news:
-                tickers = n.get('tickers', [])
-                score = n.get('score', 0)
-                for t in tickers:
-                    clean_t = t.replace('$','').replace('USDT','').upper()
-                    if clean_t not in news_map or n.get('created_at', '') > news_map[clean_t].get('date', ''):
-                        news_map[clean_t] = {"score": score, "date": n.get('created_at', '')}
+            news_map = {n.get('tickers', [None])[0].replace('$','').replace('USDT','').upper(): n.get('score', 0) 
+                       for n in latest_news if n.get('tickers')}
 
-            # 4. Merge, Score & Label
-            radar_data = []
-            for m in market_results:
-                clean_symbol = m['symbol'].replace('USDT', '')
-                sentiment = news_map.get(clean_symbol)
+            # 3. Final Merge
+            final_data = []
+            for item in top_by_vol:
+                clean_sym = item['symbol'].replace('USDT','')
+                score = news_map.get(clean_sym, 0)
                 
-                sentiment_score = sentiment['score'] if sentiment else 0
-                sentiment_label = "Neural Sync" if sentiment else "En Observación"
-                
-                # 60% RSI (Lower is better, thresh 45) + 40% Sentiment
-                rsi_factor = (100 - m['rsi']) * 0.6
-                sentiment_factor = (sentiment_score * 50 + 50) * 0.4
-                opportunity_score = rsi_factor + sentiment_factor
-                
-                radar_data.append({
-                    **m,
-                    "sentiment_score": sentiment_score,
-                    "sentiment_label": sentiment_label,
-                    "opportunity_score": round(opportunity_score, 2)
+                # Assign RSI mock for visual if real fetch is too slow for debug first step 
+                # (We will add real RSI fetch back once visibility is confirmed)
+                final_data.append({
+                    **item,
+                    "rsi": 45.0, # Placeholder for immediate visibility
+                    "sentiment_score": score,
+                    "sentiment_label": "Real-Time Sync" if score != 0 else "Observando",
+                    "opportunity_score": round(50 + (score * 50), 2)
                 })
-                
-            # 5. Ranking & Final Guarantee
-            # Goal: Best opportunities first
-            ranked = sorted(radar_data, key=lambda x: x['opportunity_score'], reverse=True)
-            
-            # If we don't have enough "Neural" positives, the Top Volume fallback is implicit
-            # because we started with the Top 50 by volume.
-            # We just need to make sure we return 10 items.
-            final_list = ranked[:10]
-            
-            status = "ok" if any(r.get('opportunity_score', 0) > 40 for r in final_list) else "debug_fallback"
             
             return {
-                "data": final_list,
-                "status": status,
-                "message": "Ranking Neural Alpha v2.0" if status == "ok" else "Analizando mercado: Filtros estrictos (Mostrando Top Volumen)"
+                "data": final_data,
+                "status": "ok",
+                "message": "CONEXIÓN REAL BITGET ACTIVADA"
             }
         except Exception as e:
-            print(f"❌ Radar Endpoint Error: {e}")
+            print(f"❌ Critical Exception in Radar: {e}")
             return {"data": [], "status": "error", "message": str(e)}
 
 # Paper Trading
