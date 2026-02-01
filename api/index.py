@@ -171,101 +171,46 @@ async def fetch_from_supabase() -> List[dict]:
             return []
 
 @app.post("/webhook/news")
-async def receive_news(news: Union[NewsItem, List[NewsItem]]):
-    # Handle single item or list of items
-    incoming_news = news if isinstance(news, list) else [news]
-    
-    saved_count = 0
-    
-    for item in incoming_news:
-        print(f"Noticia recibida: {item.titulo}")
+async def receive_news(news: Union[dict, List[dict]]):
+    try:
+        # Handle single item or list of items
+        incoming_news = news if isinstance(news, list) else [news]
+        saved_count = 0
         
-        # Initialize defaults if missing
-        if not item.sentimiento:
-            item.sentimiento = "Neutro"
-        if not item.resumen:
-             # If summary is missing, try to use title or default
-            item.resumen = item.titulo if item.titulo else "Sin resumen disponible"
+        for item in incoming_news:
+            # Destructuring with fallbacks (Manual because it might be a dict or NewsItem)
+            # Supporting both standard and n8n-style field names
+            title = item.get("title") or item.get("titulo") or "Sin título"
+            summary = item.get("summary") or item.get("resumen") or "Sin resumen disponible"
+            url = item.get("url") or item.get("enlace") or ""
+            published_at = item.get("published_at") or item.get("fecha") or "now()"
+            sentiment_score = item.get("sentiment_score") or item.get("score") or 0.0
+            tickers = item.get("tickers") or item.get("companies") or []
+            veto_status = item.get("veto") or False
 
-        # 1. Analyze with Gemini
-        # Combine title and summary for better context
-        full_text = f"{item.titulo or ''} - {item.resumen or ''}"
-        
-        try:
-            analysis_result = await analyze_with_gemini(full_text)
+            print(f"📡 Noticia Recibida: [{title}] (Veto: {veto_status})")
             
-            # 2. Merge analysis into item
-            if analysis_result:
-                if 'sentiment_score' in analysis_result:
-                    item.sentiment_score = analysis_result['sentiment_score']
-                
-                # Logic: Aggressive Labeling
-                score = item.sentiment_score if item.sentiment_score is not None else 0
-                
-                if score >= 0.2:
-                    item.sentimiento = "Positivo"
-                elif score <= -0.2:
-                    item.sentimiento = "Negativo"
-                else:
-                    item.sentimiento = "Neutral"
-
-                if 'category' in analysis_result:
-                    item.category = analysis_result['category']
-                
-                if 'tickers' in analysis_result:
-                    item.tickers = analysis_result['tickers']
-                    # Sync logic: if we have tickers, update 'empresas' too for legacy compat
-                    item.empresas = analysis_result['tickers'] 
-                
-                if 'summary' in analysis_result and analysis_result['summary']:
-                     # Valid "summary" from AI
-                    item.summary_ai = analysis_result['summary']
-                    item.resumen = analysis_result['summary']
-                    
-        except Exception as e:
-            print(f"Error merging AI analysis: {e}. Using strict defaults.")
-            # FORCE defaults to prevent Supabase 400
-            if not item.sentimiento or item.sentimiento == "Neutro":
-                item.sentimiento = "Neutro"
+            # Construct Payload for Supabase (Strict Mapping)
+            payload = {
+                "titulo": title,
+                "resumen": summary,
+                "enlace": url,
+                "fecha": published_at,
+                "sentimiento": "Positivo" if float(sentiment_score) > 0.3 else ("Negativo" if float(sentiment_score) < -0.3 else "Neutro"),
+                "score": float(sentiment_score),
+                "category": item.get("category", "Crypto"),
+                "tickers": tickers if isinstance(tickers, list) else [tickers]
+            }
             
-            # Ensure summary is NEVER None
-            if not item.resumen:
-                item.resumen = item.titulo if item.titulo else "Resumen no disponible por error de API"
+            if await save_to_supabase(payload):
+                saved_count += 1
             
-            # Default enrichment fields
-            if not item.category:
-                 item.category = "General"
-            if item.sentiment_score is None:
-                 item.sentiment_score = 0.0
-            if item.empresas is None:
-                 item.empresas = []
+        return {"status": "success", "received_count": len(incoming_news), "saved_count": saved_count}
+    except Exception as e:
+        print(f"❌ Critical Error in Webhook: {e}")
+        # Return 200 to prevent n8n from failing the whole workflow
+        return {"status": "error", "message": str(e)}
 
-        # 3. Construct Payload for Supabase (Strict Mapping)
-        # Using item fields directly to handle aliases and updates
-        
-        # Ensure values for required fields
-        final_sentiment = item.sentimiento if item.sentimiento else "Neutro"
-        final_summary = item.resumen if item.resumen else "Resumen no disponible"
-        
-        payload = {
-            "titulo": item.titulo,
-            "resumen": final_summary,
-            "enlace": item.enlace,
-            "fecha": item.fecha,
-            "sentimiento": final_sentiment,
-            "score": item.sentiment_score, # Mapped from sentiment_score to score
-            "category": item.category,
-            "tickers": item.tickers,
-            "empresas": item.empresas # Optional compatibility
-        }
-        
-        # Log payload for debug (optional, can be removed)
-        # print(f"Payload to Supabase: {payload}")
-
-        if await save_to_supabase(payload):
-            saved_count += 1
-        
-    return {"status": "success", "received_count": len(incoming_news), "saved_count": saved_count}
 
 @app.get("/news")
 async def get_news():
