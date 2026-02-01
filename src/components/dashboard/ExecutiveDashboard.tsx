@@ -12,6 +12,7 @@ interface ExecutiveDashboardProps {
     dailyPnL: number;
     dailyPnLPercent: number;
     loading?: boolean;
+    onViewAllNews?: () => void;
 }
 
 const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
