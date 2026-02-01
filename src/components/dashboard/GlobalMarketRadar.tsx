@@ -135,52 +135,71 @@ const GlobalMarketRadar: React.FC = () => {
                                     No hay datos disponibles en este momento.
                                 </td>
                             </tr>
-                        ) : filtered.map((op, idx) => (
-                            <tr key={op.symbol} className={`hover:bg-white/5 transition-colors group ${op.rsi < 45 ? 'bg-accent/5' : ''}`}>
-                                <td className="py-3 pl-2">
-                                    <span className={`text-[10px] font-bold ${idx < 3 ? 'text-accent' : 'text-gray-600'}`}>
-                                        # {idx + 1}
-                                    </span>
-                                </td>
-                                <td className="py-3">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-8 h-8 rounded bg-black/40 border border-white/10 flex items-center justify-center font-bold text-[10px] ${idx < 3 ? 'text-accent border-accent/30 shadow-[0_0_10px_rgba(132,204,22,0.1)]' : 'text-white'}`}>
-                                            {op.symbol.replace('USDT', '')}
+                        ) : filtered.map((op, idx) => {
+                            const isGoldOpportunity = op.rsi < 35 && op.sentiment_score > 0.3;
+                            const isVetoAlert = op.rsi < 35 && op.sentiment_score < -0.3;
+
+                            return (
+                                <tr key={op.symbol} className={`hover:bg-white/5 transition-all group border-l-2 ${isGoldOpportunity ? 'border-l-yellow-500 bg-yellow-500/5 shadow-[inset_0_0_20px_rgba(234,179,8,0.05)]' : 'border-l-transparent'} ${op.rsi < 45 && !isGoldOpportunity ? 'bg-accent/5' : ''}`}>
+                                    <td className="py-3 pl-2">
+                                        <span className={`text-[10px] font-bold ${idx < 3 ? 'text-accent' : 'text-gray-600'}`}>
+                                            # {idx + 1}
+                                        </span>
+                                    </td>
+                                    <td className="py-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-8 h-8 rounded bg-black/40 border border-white/10 flex items-center justify-center font-bold text-[10px] ${idx < 3 ? 'text-accent border-accent/30 shadow-[0_0_10px_rgba(132,204,22,0.1)]' : 'text-white'}`}>
+                                                {op.symbol.replace('USDT', '')}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-white text-xs flex items-center gap-1">
+                                                    {op.symbol}
+                                                    {isGoldOpportunity && (
+                                                        <span className="px-1.5 py-0.5 bg-yellow-500 text-black text-[8px] font-black rounded animate-pulse">
+                                                            GOLDEN
+                                                        </span>
+                                                    )}
+                                                    {isVetoAlert && (
+                                                        <span title="Neural Veto Recommended" className="text-red-500 animate-bounce">
+                                                            ⚠️
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <span className="font-bold text-white text-xs">{op.symbol}</span>
-                                    </div>
-                                </td>
-                                <td className="py-3 text-right font-mono text-[11px] text-white">
-                                    ${op.price < 1 ? op.price.toFixed(5) : op.price.toLocaleString()}
-                                </td>
-                                <td className="py-3 text-center">
-                                    <span className={`text-xs font-mono font-bold ${op.rsi < 45 ? 'text-green-400' : 'text-gray-500'}`}>
-                                        {op.rsi.toFixed(0)}
-                                    </span>
-                                </td>
-                                <td className="py-3 text-center">
-                                    <div className="flex flex-col items-center">
-                                        <span className={`text-[9px] uppercase font-bold mb-0.5 ${op.sentiment_label === 'Neural Sync' ? 'text-accent' : 'text-gray-600'}`}>
-                                            {op.sentiment_label}
+                                    </td>
+                                    <td className="py-3 text-right font-mono text-[11px] text-white">
+                                        ${op.price < 1 ? op.price.toFixed(5) : op.price.toLocaleString()}
+                                    </td>
+                                    <td className="py-3 text-center">
+                                        <span className={`text-xs font-mono font-bold ${op.rsi < 45 ? 'text-green-400' : 'text-gray-500'}`}>
+                                            {op.rsi.toFixed(0)}
                                         </span>
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border border-white/10 ${op.sentiment_score > 0.2 ? 'text-accent bg-accent/5 border-accent/20' :
-                                            op.sentiment_score < -0.2 ? 'text-red-500 bg-red-500/5 border-red-500/20' :
-                                                'text-gray-600'
-                                            }`}>
-                                            {op.sentiment_score > 0 ? '+' : ''}{op.sentiment_score.toFixed(1)}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td className="py-3 text-right">
-                                    <button
-                                        onClick={() => executeManualTrade(op.symbol, op.price)}
-                                        className="px-4 py-1.5 bg-accent hover:bg-white text-black font-extrabold rounded text-[10px] transition-all uppercase tracking-tighter"
-                                    >
-                                        INVERTIR
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="py-3 text-center">
+                                        <div className="flex flex-col items-center">
+                                            <span className={`text-[9px] uppercase font-bold mb-0.5 ${op.sentiment_label === 'Real-Time Bitget' ? 'text-accent' : 'text-gray-600'}`}>
+                                                {op.sentiment_label}
+                                            </span>
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border border-white/10 ${op.sentiment_score > 0.2 ? 'text-accent bg-accent/5 border-accent/20' :
+                                                op.sentiment_score < -0.2 ? 'text-red-500 bg-red-500/5 border-red-500/20' :
+                                                    'text-gray-600'
+                                                }`}>
+                                                {op.sentiment_score > 0 ? '+' : ''}{op.sentiment_score.toFixed(1)}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td className="py-3 text-right">
+                                        <button
+                                            onClick={() => executeManualTrade(op.symbol, op.price)}
+                                            className={`px-4 py-1.5 font-extrabold rounded text-[10px] transition-all uppercase tracking-tighter ${isGoldOpportunity ? 'bg-yellow-500 hover:bg-white text-black shadow-[0_0_15px_rgba(234,179,8,0.4)]' : 'bg-accent hover:bg-white text-black'}`}
+                                        >
+                                            INVERTIR
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

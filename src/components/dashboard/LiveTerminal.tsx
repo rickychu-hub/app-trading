@@ -82,12 +82,15 @@ const LiveTerminal: React.FC = () => {
                         "Sistema listo. Esperando primera operación manual o automática"
                     </div>
                 ) : (
-                    logs.map((log, i) => (
-                        <div key={i} className="text-green-400/90 tracking-wide animate-fade-in">
-                            <span className="text-gray-600 mr-2">{log.split(']')[0]}]</span>
-                            <span className="text-gray-300">{log.split(']')[1]}</span>
-                        </div>
-                    ))
+                    logs.map((log, i) => {
+                        const isBuy = log.includes('BUY EXECUTED');
+                        return (
+                            <div key={i} className={`tracking-wide animate-fade-in ${isBuy ? 'text-[#39ff14] font-bold drop-shadow-[0_0_5px_rgba(57,255,20,0.5)]' : 'text-green-400/90'}`}>
+                                <span className="text-gray-600 mr-2">{log.split(']')[0]}]</span>
+                                <span className={isBuy ? 'text-[#39ff14]' : 'text-gray-300'}>{log.split(']')[1]}</span>
+                            </div>
+                        );
+                    })
                 )}
                 <div ref={endRef} />
             </div>
