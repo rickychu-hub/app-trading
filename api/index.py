@@ -23,11 +23,21 @@ app.add_middleware(
 
 # Configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+# Handle both names for the service key
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+# Debugging logs for Vercel
+print(f"🔍 [DEBUG] SUPABASE_URL: {SUPABASE_URL[:10]}..." if SUPABASE_URL else "🔍 [DEBUG] SUPABASE_URL NOT FOUND")
+print(f"🔍 [DEBUG] SUPABASE_KEY: {SUPABASE_KEY[:10]}..." if SUPABASE_KEY else "🔍 [DEBUG] SUPABASE_KEY NOT FOUND")
+print(f"🔍 [DEBUG] GEMINI_API_KEY: {GEMINI_API_KEY[:5]}..." if GEMINI_API_KEY else "🔍 [DEBUG] GEMINI_API_KEY NOT FOUND")
+
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        print(f"❌ [ERROR] GenAI Configuration failed: {e}")
+
 
 # Gemini Analysis Function
 async def analyze_with_gemini(text: str) -> dict:
