@@ -1,6 +1,6 @@
 import os
 import httpx
-from google import genai
+import google.generativeai as genai
 import json
 import traceback
 from fastapi import FastAPI
@@ -25,6 +25,34 @@ app.add_middleware(
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+# Gemini Analysis Function
+async def analyze_with_gemini(text: str) -> dict:
+    if not GEMINI_API_KEY:
+        return {}
+    try:
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        prompt = f"""
+        Actúa como un Analista Financiero. Analiza la siguiente noticia y devuelve JSON estricto.
+        {{
+            "sentiment_score": <float -1.0 a 1.0>,
+            "category": <"Crypto", "Economy", "General">,
+            "tickers": <list of tickers>,
+            "summary": <resumen en español, max 15 palabras>
+        }}
+        Noticia: "{text}"
+        """
+        response = model.generate_content(prompt)
+        content = response.text.replace('```json', '').replace('```', '').strip()
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error AI: {e}")
+        return {}
+
+
 
 # Data Model
 class NewsItem(BaseModel):
