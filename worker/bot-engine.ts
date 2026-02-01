@@ -113,6 +113,46 @@ function calculateIndicators(candles: Candle[]) {
 }
 
 
+/**
+ * Neural Veto: Consults Supabase news table for the latest sentiment/veto for a ticker.
+ */
+async function getLatestMarketSentiment(ticker: string) {
+    const cleanTicker = ticker.replace('USDT', '').trim().toUpperCase();
+
+    try {
+        // Query the latest news for this ticker or general crypto news
+        const { data, error } = await supabase
+            .from('news')
+            .select('titulo, score, sentimiento, veto, created_at')
+            .or(`tickers.cs.{${cleanTicker}},category.eq.Crypto`)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (error) {
+            console.error(`❌ DB Error fetching Neural Veto for ${cleanTicker}:`, error.message);
+            return { score: 0, veto: false, title: 'Error' };
+        }
+
+        if (!data || data.length === 0) {
+            return { score: 0, veto: false, title: 'No news found' };
+        }
+
+        const latest = data[0];
+        console.log(`🧠 NEURAL SYNC [${cleanTicker}]: Score ${latest.score} | Veto: ${latest.veto} | "${latest.titulo}"`);
+
+        return {
+            score: latest.score || 0,
+            veto: latest.veto || false,
+            title: latest.titulo
+        };
+    } catch (e: any) {
+        console.error(`❌ Unexpected error in getLatestMarketSentiment: ${e.message}`);
+        return { score: 0, veto: false, title: 'Error' };
+    }
+}
+
+
+
 // --- Trading Logic ---
 
 async function executeTrade(
@@ -341,15 +381,26 @@ async function runMarketScan() {
             const stopLossPrice = price - (atr * 2);
             const takeProfitPrice = price + (atr * 3); // 1:1.5 Risk/Reward
 
-            // 7. News Audit
-            const newsAnalysis = await NewsAuditor.analyzeSentiment(symbol);
-            if (newsAnalysis.score < -0.4) {
-                console.log(`⛔ NEWS VETO: Sentiment too negative (${newsAnalysis.score}) for ${symbol}.`);
+            // 7. Neural Veto (Supabase News Integration)
+            const newsAnalysis = await getLatestMarketSentiment(symbol);
+
+            if (newsAnalysis.veto === true || newsAnalysis.score < -0.6) {
+                const reason = newsAnalysis.veto ? "Veto Explícito (n8n)" : `Sentimiento Bajista (${newsAnalysis.score})`;
+                console.log(`⛔ NEURAL VETO: Trade for ${symbol} cancelled. Reason: ${reason}`);
+
+                await telegramService.notifyAlert(
+                    `Veto Neural - ${symbol}`,
+                    `🛡️ <b>Operación Cancelada por Escudo Neural</b>\n\n` +
+                    `<b>Activo:</b> ${symbol}\n` +
+                    `<b>Motivo:</b> ${reason}\n\n` +
+                    `<b>Última Noticia:</b> ${newsAnalysis.title}`
+                );
                 continue;
             }
 
-            // 8. Execute with Veto
-            await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.summary, stopLossPrice, takeProfitPrice);
+            // 8. Execute Trade
+            await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.title, stopLossPrice, takeProfitPrice);
+
         } else {
             if (isBreakout) console.log(`⚠️ Breakout without volume confirmation for ${symbol}.`);
         }
