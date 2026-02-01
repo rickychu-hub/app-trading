@@ -91,23 +91,28 @@ def calculate_rsi(prices, period=14):
     return 100 - (100 / (1 + rs))
 
 async def fetch_ticker_data(client, symbol):
-    # Simulating Bitget/Binance logic for top assets
+    # Switching to Bitget Public API for Top Assets
     try:
-        # Fetching 1H candles (limit 50 to be safe for RSI 14)
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=50"
+        # Bitget Spot Klines (1h)
+        # Format: symbol, granularity (1h), limit
+        url = f"https://api.bitget.com/api/v2/spot/market/history-candles?symbol={symbol}&granularity=1h&limit=50"
         resp = await client.get(url, timeout=5.0)
+        
         if resp.status_code != 200:
+            print(f"⚠️ Bitget Klines Error [{symbol}]: {resp.status_code}")
             return None
         
-        data = resp.json()
+        data = resp.json().get('data', [])
+        if not data:
+            return None
+            
+        # Bitget candles: [ts, open, high, low, close, vol, quoteVol]
         closes = [float(d[4]) for d in data]
         current_price = closes[-1]
         rsi = calculate_rsi(closes)
         
-        # 24h Volume (from 24h ticker)
-        ticker_url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}"
-        t_resp = await client.get(ticker_url, timeout=5.0)
-        volume_24h = float(t_resp.json().get('quoteVolume', 0)) if t_resp.status_code == 200 else 0
+        # Volume from latest candle or ticker
+        volume_24h = float(data[-1][6]) # quoteVol of last candle as proxy or use ticker
         
         return {
             "symbol": symbol,
@@ -116,7 +121,7 @@ async def fetch_ticker_data(client, symbol):
             "volume_24h": volume_24h
         }
     except Exception as e:
-        print(f"Error fetching data for {symbol}: {e}")
+        print(f"❌ Bitget Fetch Exception [{symbol}]: {e}")
         return None
 
 
@@ -279,16 +284,25 @@ async def get_market_radar():
                 "is_oversold": m['rsi'] < 45
             })
             
-        # Sort by score
-        ranked = sorted(radar_data, key=lambda x: x['opportunity_score'], reverse=True)
+        # ranked by opportunity_score first
+        ranked = sorted(radar_data, key=lambda x: (x['opportunity_score'], x['volume_24h']), reverse=True)
         
-        # If TOP 10 is empty (unlikely if market_results has data), or for debugging:
-        if not ranked and market_results:
-            # Fallback to Top Volume
-            fallback = sorted(market_results, key=lambda x: x['volume_24h'], reverse=True)[:5]
-            return {"data": fallback, "status": "debug_fallback", "message": "Analizando mercado: Filtros actuales muy estrictos"}
-            
-        return {"data": ranked[:10], "status": "ok"}
+        # FINAL FAIL-SAFE: If ranking returns less than 10, fill with top volume symbols from the results
+        if len(ranked) < 10 and market_results:
+            by_vol = sorted(radar_data, key=lambda x: x['volume_24h'], reverse=True)
+            for item in by_vol:
+                if item not in ranked:
+                    ranked.append(item)
+                if len(ranked) >= 10: break
+
+        final_data = ranked[:10]
+        status = "ok" if any(r.get('opportunity_score', 0) > 40 for r in final_data) else "debug_fallback"
+        
+        return {
+            "data": final_data,
+            "status": status,
+            "message": "Ranking Neural Alpha v2.0" if status == "ok" else "Analizando mercado: Filtros estrictos (Mostrando Top Volumen)"
+        }
 
 # Paper Trading
 class PaperTrade(BaseModel):
