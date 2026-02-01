@@ -2,7 +2,7 @@
 import React from 'react';
 import MarketStatusHeader from './MarketStatusHeader';
 import MarketOverview from './MarketOverview';
-import IntelligenceHub from './IntelligenceHub';
+import GlobalMarketRadar from './GlobalMarketRadar';
 import LiveTerminal from './LiveTerminal';
 
 interface ExecutiveDashboardProps {
@@ -12,7 +12,6 @@ interface ExecutiveDashboardProps {
     dailyPnL: number;
     dailyPnLPercent: number;
     loading?: boolean;
-    onViewAllNews?: () => void;
 }
 
 const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
@@ -21,8 +20,7 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     totalEquity,
     dailyPnL,
     dailyPnLPercent,
-    loading = false,
-    onViewAllNews
+    loading = false
 }) => {
     return (
         <div className="space-y-6 animate-fade-in">
@@ -44,9 +42,9 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     <MarketOverview />
                 </div>
 
-                {/* INTELLIGENCE HUB - Mobile: Order 2, Desktop: Center (2 Cols) */}
-                <div className="w-full lg:col-span-2 h-[500px] lg:h-[600px]">
-                    <IntelligenceHub onViewAllClick={onViewAllNews} />
+                {/* GLOBAL MARKET RADAR - Mobile: Order 2, Desktop: Center (2 Cols) */}
+                <div className="w-full lg:col-span-2 h-[500px] lg:h-[600px] overflow-hidden">
+                    <GlobalMarketRadar />
                 </div>
 
                 {/* LIVE TERMINAL - Mobile: Order 3, Desktop: Right (1 Col) */}

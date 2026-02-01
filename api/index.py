@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Union
 import random
+import math
+import asyncio
 
 app = FastAPI(title="InvIntel API", root_path="/api")
 
@@ -61,6 +63,61 @@ async def analyze_with_gemini(text: str) -> dict:
     except Exception as e:
         print(f"Error AI: {e}")
         return {}
+
+
+# Market Data Helpers
+def calculate_rsi(prices, period=14):
+    if len(prices) <= period:
+        return 50.0
+    
+    deltas = [prices[i+1] - prices[i] for i in range(len(prices)-1)]
+    gains = [d if d > 0 else 0 for d in deltas]
+    losses = [-d if d < 0 else 0 for d in deltas]
+    
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    
+    if avg_loss == 0:
+        return 100.0
+    
+    for i in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        
+    if avg_loss == 0:
+        return 100.0
+        
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+async def fetch_ticker_data(client, symbol):
+    # Simulating Bitget/Binance logic for top assets
+    try:
+        # Fetching 1H candles (limit 50 to be safe for RSI 14)
+        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=50"
+        resp = await client.get(url, timeout=5.0)
+        if resp.status_code != 200:
+            return None
+        
+        data = resp.json()
+        closes = [float(d[4]) for d in data]
+        current_price = closes[-1]
+        rsi = calculate_rsi(closes)
+        
+        # 24h Volume (from 24h ticker)
+        ticker_url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}"
+        t_resp = await client.get(ticker_url, timeout=5.0)
+        volume_24h = float(t_resp.json().get('quoteVolume', 0)) if t_resp.status_code == 200 else 0
+        
+        return {
+            "symbol": symbol,
+            "price": current_price,
+            "rsi": round(rsi, 2),
+            "volume_24h": volume_24h
+        }
+    except Exception as e:
+        print(f"Error fetching data for {symbol}: {e}")
+        return None
 
 
 
@@ -169,6 +226,46 @@ async def receive_news(news: Union[dict, List[dict]]):
 @app.get("/news")
 async def get_news():
     return await fetch_from_supabase()
+
+@app.get("/market-radar")
+async def get_market_radar():
+    assets = [
+        "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT", 
+        "DOTUSDT", "LINKUSDT", "NEARUSDT", "MATICUSDT", "SUIUSDT", "FETUSDT", "RNDRUSDT",
+        "INJUSDT", "PEPEUSDT", "SHIBUSDT", "OPUSDT", "ARBUSDT", "TIAUSDT"
+    ]
+    
+    async with httpx.AsyncClient() as client:
+        # Fetch market data in parallel
+        tasks = [fetch_ticker_data(client, asset) for asset in assets]
+        market_results = await asyncio.gather(*tasks)
+        market_results = [r for r in market_results if r]
+
+        # Fetch latest sentiment for all these from Supabase
+        # To optimize, we'll just get the latest entries from 'news'
+        latest_news = await fetch_from_supabase() # Returns latest 4, maybe more?
+        # Let's adjust fetch_from_supabase to take a limit if possible, or just use another query
+        
+        news_map = {}
+        for n in latest_news:
+            tickers = n.get('tickers', [])
+            score = n.get('score', 0)
+            for t in tickers:
+                clean_t = t.replace('$','').replace('USDT','').upper()
+                if clean_t not in news_map or n.get('created_at', '') > news_map[clean_t].get('date', ''):
+                    news_map[clean_t] = {"score": score, "date": n.get('created_at', '')}
+
+        # Merge
+        radar_data = []
+        for m in market_results:
+            clean_symbol = m['symbol'].replace('USDT', '')
+            sentiment = news_map.get(clean_symbol, {"score": 0})
+            radar_data.append({
+                **m,
+                "sentiment_score": sentiment['score']
+            })
+            
+        return sorted(radar_data, key=lambda x: x['rsi'])
 
 # Paper Trading
 class PaperTrade(BaseModel):
