@@ -20,7 +20,7 @@ const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
 // Strategy Constants
 const TIMEFRAME = '1h';
 const CONSOLIDATION_PERIODS = 30;
-const MAX_BOX_VOLATILITY = 0.02; // 2%
+const MAX_BOX_VOLATILITY = 0.04; // 4%
 const VOLUME_MA_PERIOD = 20;
 const VOLUME_MULTIPLIER = 1.2;
 const FALLING_KNIFE_THRESHOLD = -5; // -5%
@@ -362,7 +362,7 @@ async function runMarketScan() {
         const box = detectConsolidation(candles.slice(0, -1)); // Check box on previous 30 candles
 
         if (!box.valid) {
-            console.log(`📦 ${symbol}: No valid consolidation box (Volat: ${(box.volatility * 100).toFixed(2)}% > 2%). Skipping.`);
+            console.log(`📦 ${symbol}: No valid consolidation box (Volat: ${(box.volatility * 100).toFixed(2)}% > 4%). Skipping.`);
             continue;
         }
 
