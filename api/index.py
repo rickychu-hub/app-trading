@@ -259,17 +259,26 @@ async def get_market_radar():
                 if clean_t not in news_map or n.get('created_at', '') > news_map[clean_t].get('date', ''):
                     news_map[clean_t] = {"score": score, "date": n.get('created_at', '')}
 
-        # Merge
+        # Merge & Score
         radar_data = []
         for m in market_results:
             clean_symbol = m['symbol'].replace('USDT', '')
             sentiment = news_map.get(clean_symbol, {"score": 0})
+            sentiment_score = sentiment['score']
+            
+            # 60% RSI (Lower is better, so 100-RSI) + 40% Sentiment (Normalized -1..1 to 0..100)
+            rsi_factor = (100 - m['rsi']) * 0.6
+            sentiment_factor = (sentiment_score * 50 + 50) * 0.4
+            opportunity_score = rsi_factor + sentiment_factor
+            
             radar_data.append({
                 **m,
-                "sentiment_score": sentiment['score']
+                "sentiment_score": sentiment_score,
+                "opportunity_score": round(opportunity_score, 2)
             })
             
-        return sorted(radar_data, key=lambda x: x['rsi'])
+        # Return Top 10 by Opportunity Score
+        return sorted(radar_data, key=lambda x: x['opportunity_score'], reverse=True)[:10]
 
 # Paper Trading
 class PaperTrade(BaseModel):
