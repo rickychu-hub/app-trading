@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
+
 // @ts-ignore
 import { RSI, EMA, ATR } from 'technicalindicators';
 import { RiskManager } from './RiskManager';
@@ -12,7 +14,19 @@ dotenv.config();
 // Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; // Secure Key for Server
-const LOOP_INTERVAL = 60000; // 1 minute
+const LOOP_INTERVAL = 300000; // 5 minutes (more efficient for 1H strategy)
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
+
+// Strategy Constants
+const TIMEFRAME = '1h';
+const CONSOLIDATION_PERIODS = 30;
+const MAX_BOX_VOLATILITY = 0.02; // 2%
+const VOLUME_MA_PERIOD = 20;
+const VOLUME_MULTIPLIER = 1.2;
+const FALLING_KNIFE_THRESHOLD = -5; // -5%
+const FALLING_KNIFE_LOOKBACK = 4;   // 4 hours
+const FREEZE_DURATION_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     console.error("❌ CRITICAL: Missing credentials in .env");
@@ -22,6 +36,8 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 let globalUnrealizedPnL = 0; // Track aggregate performance of open positions
 let isDumpingAlertActive = false; // Track if we've already notified about BTC dumping
+const frozenAssets = new Map<string, number>(); // Ticker -> Unfreeze Timestamp
+
 
 const TOP_ASSETS = [
     // 1. Los Reyes (Seguridad y Volumen)
@@ -51,14 +67,29 @@ interface Candle {
 
 // fetchCandles removed, using ExchangeAPI directly
 
+function detectConsolidation(candles: Candle[]) {
+    if (candles.length < CONSOLIDATION_PERIODS) return { valid: false, high: 0, low: 0, volatility: 0 };
+
+
+    const lookback = candles.slice(-CONSOLIDATION_PERIODS);
+    const high = Math.max(...lookback.map(c => c.high));
+    const low = Math.min(...lookback.map(c => c.low));
+
+    const volatility = (high - low) / low;
+    const valid = volatility <= MAX_BOX_VOLATILITY;
+
+    return { valid, high, low, volatility: volatility || 0 };
+}
+
+
 function calculateIndicators(candles: Candle[]) {
     const closes = candles.map(c => c.close);
     const highs = candles.map(c => c.high);
     const lows = candles.map(c => c.low);
+    const volumes = candles.map(c => c.volume);
 
-    // EMA 9 & 21
-    const emaFastInput = { values: closes, period: 9 };
-    const emaSlowInput = { values: closes, period: 21 };
+    // SMAs for Volume
+    const volSMA = volumes.slice(-VOLUME_MA_PERIOD).reduce((a, b) => a + b, 0) / VOLUME_MA_PERIOD;
 
     // RSI 14
     const rsiInput = { values: closes, period: 14 };
@@ -66,23 +97,21 @@ function calculateIndicators(candles: Candle[]) {
     // ATR 14 (for Volatility Guard)
     const atrInput = { high: highs, low: lows, close: closes, period: 14 };
 
-    const emaFast = EMA.calculate(emaFastInput);
-    const emaSlow = EMA.calculate(emaSlowInput);
     const rsi = RSI.calculate(rsiInput);
     const atr = ATR.calculate(atrInput);
+    const ema200 = EMA.calculate({ period: 200, values: closes });
 
-    // Get latest values (last index) & Previous
     return {
         price: closes[closes.length - 1],
-        prevPrice: closes[closes.length - 2] || 0, // Close of previous candle
-        emaFast: emaFast[emaFast.length - 1] || 0,
-        emaSlow: emaSlow[emaSlow.length - 1] || 0,
+        prevPrice: closes[closes.length - 2] || 0,
         rsiCurrent: rsi[rsi.length - 1] || 50,
-        rsiPrevious: rsi[rsi.length - 2] || 50,
-        ema200: EMA.calculate({ period: 200, values: closes }),
-        atr: atr
+        atr: atr[atr.length - 1] || 0,
+        ema200: ema200[ema200.length - 1] || 0,
+        volSMA: volSMA,
+        currentVolume: volumes[volumes.length - 1]
     };
 }
+
 
 // --- Trading Logic ---
 
@@ -100,27 +129,59 @@ async function executeTrade(
         return;
     }
 
-    // 1. Check if we already have an open trade for this user/bot (Idempotency)
+    // 1. Check if we already have an open trade
     const cleanTicker = ticker.replace('USDT', '').trim().toUpperCase();
 
-    // Double Check: Verify if ANY open position exists for this ticker
     const { data: existingTrades, error: fetchError } = await supabase
         .from('paper_trades')
         .select('id, ticker, status')
         .eq('status', 'OPEN')
-        .ilike('ticker', cleanTicker); // Use ilike for case-insensitivity
+        .ilike('ticker', cleanTicker);
 
     if (fetchError) {
         console.error(`❌ DB Error checking duplicates for ${cleanTicker}:`, fetchError.message);
-        return; // Fail safe
-    }
-
-    if (existingTrades && existingTrades.length > 0) {
-        console.log(`⏸️  Skipping ${cleanTicker}: Position already open (ID: ${existingTrades[0].id}).`);
         return;
     }
 
-    // 2. Insert Trade
+    if (existingTrades && existingTrades.length > 0) {
+        console.log(`⏸️  Skipping ${cleanTicker}: Position already open.`);
+        return;
+    }
+
+    // 2. On-Demand Neural Veto (Active n8n Trigger)
+    if (N8N_WEBHOOK_URL) {
+        console.log(`🧠 [WAITING_FOR_VETO] Triggering Neural Validation for ${cleanTicker}...`);
+        try {
+            const response = await axios.post(N8N_WEBHOOK_URL, {
+                ticker: cleanTicker,
+                price: price,
+                strategy: 'SWING-BOX-BREAKOUT-ON-DEMAND',
+                timestamp: new Date().toISOString()
+            }, { timeout: 15000 }); // 15s Timeout as requested
+
+            const decision = response.data?.decision;
+            const reason = response.data?.reason || 'Market Sentiment';
+
+            if (decision === 'PROCEED') {
+                console.log(`✅ NEURAL VETO: n8n approved ${cleanTicker}. Proceeding immediately.`);
+            } else if (decision === 'VETO') {
+                console.log(`⛔ NEURAL VETO: n8n rejected trade for ${cleanTicker}. Reason: ${reason}`);
+                return;
+            } else {
+                console.warn(`⚠️ NEURAL VETO: Inconclusive decision for ${cleanTicker}. Cancelling for safety.`);
+                return;
+            }
+        } catch (e: any) {
+            console.error(`❌ NEURAL VETO TIMEOUT/ERROR: No response from n8n in 15s for ${cleanTicker}. Operación cancelada por Veto Neural o Timeout.`);
+            return;
+        }
+    } else {
+        console.warn(`⚠️ N8N_WEBHOOK_URL not configured. Skipping Neural Veto for ${cleanTicker}.`);
+    }
+
+
+
+    // 3. Insert Trade
     const quantity = amount / price;
 
     const { error } = await supabase.from('paper_trades').insert([{
@@ -128,11 +189,13 @@ async function executeTrade(
         entry_price: price,
         invested_amount: amount,
         quantity: quantity,
-        initial_score: 90, // High score for manual confirmation strategy
+        initial_score: 95,
         status: 'OPEN',
-        news_id: 'BOT-RSI-CROSS', // Marker for this specific strategy
+        news_id: 'SWING-BOX',
         news_sentiment_score: sentimentScore,
-        news_summary: newsSummary
+        news_summary: newsSummary,
+        stop_loss: stopLossPrice,
+        take_profit: takeProfitPrice
     }]);
 
     if (error) {
@@ -140,7 +203,6 @@ async function executeTrade(
     } else {
         console.log(`🚀 BUY EXECUTED: ${cleanTicker} @ $${price}`);
 
-        // Send Telegram notification
         let details = `<b>Cantidad:</b> ${quantity.toFixed(4)} ${cleanTicker}\n` +
             `<b>Inversión:</b> $${amount.toFixed(2)}`;
 
@@ -154,13 +216,10 @@ async function executeTrade(
             details += `\n<b>Take Profit:</b> $${takeProfitPrice.toFixed(2)} (+${tpPercent.toFixed(2)}%)`;
         }
 
-        if (sentimentScore !== 0) {
-            details += `\n<b>Sentiment Score:</b> ${sentimentScore.toFixed(2)}`;
-        }
-
         await telegramService.notifyTrade('BUY', cleanTicker, price, details);
     }
 }
+
 
 async function runMarketScan() {
     // 0. Safety Check via Risk Manager
@@ -172,7 +231,14 @@ async function runMarketScan() {
         return;
     }
 
-    console.log(`\n🔎 Scanning Market [${new Date().toISOString()}]... (Risk Status: OK)`);
+    const anyFrozen = TOP_ASSETS.some(s => {
+        const unfreezeAt = frozenAssets.get(s);
+        return unfreezeAt && Date.now() < unfreezeAt;
+    });
+
+    console.log(`\n🔎 Scanning Market [${new Date().toISOString()}]...`);
+    console.log(`🛡️ Estado de Protección: ${anyFrozen ? '❄️ CONGELADO (Algunos activos)' : '✅ ACTIVO'}`);
+
 
     // ========================================
     // THE KING'S MOOD - BTC Sentiment Check
@@ -221,80 +287,75 @@ async function runMarketScan() {
     }
 
     for (const symbol of TOP_ASSETS) {
-        console.log(`⏳ Processing ${symbol}...`);
-        // 1. Fetch
-        const candles = await ExchangeAPI.fetchCandles(symbol);
-        if (candles.length < 30) continue;
-
-        // 2. Analyze
-        const { price, prevPrice, rsiCurrent, rsiPrevious, ema200, atr } = calculateIndicators(candles);
-        const lastEma200 = ema200[ema200.length - 1];
-        const currentATR = atr[atr.length - 1] || 0;
-
-        console.log(`📊 ${symbol}: Price $${price.toFixed(2)} | RSI ${rsiCurrent.toFixed(2)} | EMA200 $${lastEma200 ? lastEma200.toFixed(2) : 'N/A'} | ATR ${currentATR.toFixed(2)}`);
-
-        // 3. Trend Compass Filter (EMA 200)
-        if (lastEma200) {
-            if (price < lastEma200) {
-                console.log(`🐻 Bearish Trend (Price < EMA200). Skipping trade for ${symbol}.`);
-                continue;
-            } else {
-                console.log(`🐂 Bullish Trend Confirmed. Proceeding...`);
-            }
-        } else {
-            console.log(`⚠️ Not enough data for EMA200. Proceeding with caution...`);
+        // 0. Freeze Check
+        const unfreezeAt = frozenAssets.get(symbol);
+        if (unfreezeAt && Date.now() < unfreezeAt) {
+            console.log(`❄️ ${symbol} is frozen until ${new Date(unfreezeAt).toLocaleTimeString()}. Skipping.`);
+            continue;
         }
 
-        // 3. Logic: RSI Crossover (Dip Buying with Confirmation)
-        // Condition A: Previous RSI was < 30 (Oversold)
-        const wasOversold = rsiPrevious < 30;
+        console.log(`⏳ Processing ${symbol}...`);
 
-        // Condition B: Current RSI > Previous RSI (Turning Up)
-        const isRecovering = rsiCurrent > rsiPrevious;
+        // 1. Fetch 1H candles
+        const candles = await ExchangeAPI.fetchCandles(symbol, TIMEFRAME, 100);
+        if (candles.length < 50) continue;
 
-        // Condition C: Green Candle (Price Confirmation)
-        const isGreenCandle = price > prevPrice;
+        // 2. Analyze indicators
+        const { price, prevPrice, atr, ema200, volSMA, currentVolume } = calculateIndicators(candles);
 
-        const logMsg = `${symbol.padEnd(8)} | Price: ${price.toFixed(2)} | RSI Prev: ${rsiPrevious.toFixed(1)} -> Curr: ${rsiCurrent.toFixed(1)}`;
-        // console.log(logMsg); 
+        // 3. Falling Knife Detection (5% drop in 4h)
+        const price4hAgo = candles[candles.length - 5]?.close || candles[0].close;
+        const change4h = ((price - price4hAgo) / price4hAgo) * 100;
 
-        // 4. Decision
-        if (wasOversold && isRecovering && isGreenCandle) {
-            console.log(`✅ TECHNICAL FILTER PASSED: ${logMsg}`);
+        if (change4h <= FALLING_KNIFE_THRESHOLD) {
+            console.warn(`🔪 FALLING KNIFE: ${symbol} dropped ${change4h.toFixed(2)}% in 4h. Freezing for 12h.`);
+            frozenAssets.set(symbol, Date.now() + FREEZE_DURATION_MS);
+            await telegramService.notifyAlert(
+                `Falling Knife - ${symbol}`,
+                `⚠️ <b>${symbol}</b> ha caído un <b>${change4h.toFixed(2)}%</b> en 4 horas.\n` +
+                `Congelado por 12 horas para evitar operar en caída libre.`
+            );
+            continue;
+        }
 
-            // ========================================
-            // VOLATILITY GUARD - ATR-Based Stop Loss
-            // ========================================
-            const atrMultiplier = 2.0; // 2x ATR for stop loss
-            const stopLossPrice = price - (currentATR * atrMultiplier);
-            const stopLossPercent = ((price - stopLossPrice) / price) * 100;
+        // 4. Consolidation Check (The Box)
+        const box = detectConsolidation(candles.slice(0, -1)); // Check box on previous 30 candles
 
-            // Take Profit: 1.5x the risk distance
-            const riskDistance = price - stopLossPrice;
-            const takeProfitPrice = price + (riskDistance * 1.5);
-            const takeProfitPercent = ((takeProfitPrice - price) / price) * 100;
+        if (!box.valid) {
+            console.log(`📦 ${symbol}: No valid consolidation box (Volat: ${(box.volatility * 100).toFixed(2)}% > 2%). Skipping.`);
+            continue;
+        }
 
-            console.log(`🛡️ VOLATILITY GUARD:`);
-            console.log(`   ATR: $${currentATR.toFixed(2)}`);
-            console.log(`   Stop Loss: $${stopLossPrice.toFixed(2)} (-${stopLossPercent.toFixed(2)}%)`);
-            console.log(`   Take Profit: $${takeProfitPrice.toFixed(2)} (+${takeProfitPercent.toFixed(2)}%)`);
-            console.log(`   Risk/Reward: 1:1.5`);
+        console.log(`📦 ${symbol}: Box found [$${box.low.toFixed(2)} - $${box.high.toFixed(2)}]. Scanning for breakout...`);
 
-            // Phase 2: News Audit (Qualitative Check)
+        // 5. Trigger Logic
+        const isBreakout = price > box.high && prevPrice <= box.high;
+        const volumeConfirmed = currentVolume > volSMA * VOLUME_MULTIPLIER;
+
+        if (isBreakout && volumeConfirmed) {
+            console.log(`🚀 BREAKOUT DETECTED for ${symbol}!`);
+            console.log(`   Price: $${price.toFixed(2)} > High: $${box.high.toFixed(2)}`);
+            console.log(`   Volume: ${currentVolume.toFixed(0)} > 1.2x SMA: ${(volSMA * 1.2).toFixed(0)}`);
+
+            // 6. Volatility Guard (ATR)
+            const stopLossPrice = price - (atr * 2);
+            const takeProfitPrice = price + (atr * 3); // 1:1.5 Risk/Reward
+
+            // 7. News Audit
             const newsAnalysis = await NewsAuditor.analyzeSentiment(symbol);
-
-            if (newsAnalysis.score < -0.5) {
-                console.log(`⛔ BUY REJECTED: News Sentiment too negative (${newsAnalysis.score}) for ${symbol}. Summary: ${newsAnalysis.summary}`);
+            if (newsAnalysis.score < -0.4) {
+                console.log(`⛔ NEWS VETO: Sentiment too negative (${newsAnalysis.score}) for ${symbol}.`);
                 continue;
             }
 
-            console.log(`🚀 EXECUTING BUY: Sentiment Validated (${newsAnalysis.score}).`);
+            // 8. Execute with Veto
             await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.summary, stopLossPrice, takeProfitPrice);
-        } else if (wasOversold && !isRecovering) {
-            console.log(`⚠️ Watching ${symbol} (Falling Knife): RSI ${rsiCurrent.toFixed(1)} still dropping...`);
+        } else {
+            if (isBreakout) console.log(`⚠️ Breakout without volume confirmation for ${symbol}.`);
         }
     }
 }
+
 
 // --- Main Loop ---
 
@@ -316,63 +377,49 @@ async function managePositions() {
 
     for (const trade of openTrades) {
         console.log(`⏳ Checking trade ${trade.ticker} (ID: ${trade.id})...`);
-        // Normalize Ticker to match Binance format (e.g. BTC -> BTCUSDT)
         const symbol = trade.ticker.endsWith('USDT') ? trade.ticker : `${trade.ticker}USDT`;
 
         // 2. Get Live Price
         const currentPrice = await ExchangeAPI.fetchPrice(symbol);
         if (!currentPrice || currentPrice <= 0) continue;
 
-        const entryPrice = trade.entry_price || trade.invested_amount; // Fallback for legacy
-
+        const entryPrice = trade.entry_price || trade.invested_amount;
         if (!entryPrice || entryPrice <= 0) continue;
 
-        // 3. Risk Logic & Max Price Tracking
+        // 3. Trailing & Break-Even Logic
+        let currentStopLoss = trade.stop_loss;
         let shouldSell = false;
         let reason = "";
 
-        // A. Update Highest Price (Trailing Stop Base)
-        // Ensure we have a valid baseline for highest price
-        let highestPrice = trade.highest_price;
-        if (!highestPrice || highestPrice < entryPrice) {
-            highestPrice = entryPrice;
+        const currentProfitPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+
+        // A. Break-Even Trigger (1.5% Profit)
+        if (currentProfitPercent >= 1.5) {
+            const breakEvenPrice = entryPrice * 1.001; // Entry + 0.1% commission
+            if (!currentStopLoss || breakEvenPrice > currentStopLoss) {
+                console.log(`🛡️ BREAK-EVEN: ${trade.ticker} profit ${currentProfitPercent.toFixed(2)}% >= 1.5%. Moving SL to $${breakEvenPrice.toFixed(2)}.`);
+                currentStopLoss = breakEvenPrice;
+
+                await supabase
+                    .from('paper_trades')
+                    .update({ stop_loss: currentStopLoss })
+                    .eq('id', trade.id);
+            }
         }
 
-        // If current price exceeds recorded highest, update it
-        if (currentPrice > highestPrice) {
-            highestPrice = currentPrice;
-
-            // Persist new High to DB so we don't lose it if bot restarts
-            await supabase
-                .from('paper_trades')
-                .update({ highest_price: highestPrice })
-                .eq('id', trade.id);
-
-            console.log(`📈 New High for ${trade.ticker}: $${highestPrice} (Tracking for Trailing Stop)`);
-        }
-
-        // B. Calculate Thresholds
-        const dynamicStopPrice = highestPrice * 0.98; // 2% drop from Peak
-        const hardStopPrice = entryPrice * 0.97;      // 3% drop from Entry (Safety Net)
-
-        // C. Check Sell Conditions
-        if (currentPrice < dynamicStopPrice) {
-            // Condition 1: Trailing Stop Hit
+        // B. Check Sell Conditions
+        if (currentStopLoss && currentPrice <= currentStopLoss) {
             shouldSell = true;
-            reason = `TRAILING STOP HIT (Dropped from Peak $${highestPrice})`;
-        }
-        else if (currentPrice < hardStopPrice) {
-            // Condition 2: Safety Hard Stop Hit
+            reason = `STOP LOSS HIT @ $${currentPrice.toFixed(2)} (SL: $${currentStopLoss.toFixed(2)})`;
+        } else if (trade.take_profit && currentPrice >= trade.take_profit) {
             shouldSell = true;
-            const pnl = ((currentPrice - entryPrice) / entryPrice) * 100;
-            reason = `HARD STOP HIT (Safety Net Triggered at ${pnl.toFixed(2)}%)`;
+            reason = `TAKE PROFIT HIT @ $${currentPrice.toFixed(2)} (TP: $${trade.take_profit.toFixed(2)})`;
         }
 
         // 4. Execute Sale
         if (shouldSell) {
             console.log(`🚨 EXECUTING SALE for ${trade.ticker}: ${reason}`);
 
-            // Calc Final PnL Amount
             const invested = trade.invested_amount || entryPrice;
             const quantity = trade.quantity || (invested / entryPrice);
             const exitValue = quantity * currentPrice;
@@ -394,7 +441,6 @@ async function managePositions() {
             } else {
                 console.log(`✅ Trade ${trade.id} CLOSED successfully.`);
 
-                // Send Telegram notification
                 const pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
                 const details = `<b>PnL:</b> $${finalPnL.toFixed(2)} (${pnlPercent.toFixed(2)}%)\n` +
                     `<b>Reason:</b> ${reason}`;
@@ -402,7 +448,6 @@ async function managePositions() {
                 await telegramService.notifyTrade('SELL', trade.ticker, currentPrice, details);
             }
         } else {
-            // Only add to unrealized PnL if the position is still open
             currentLoopPnL += (currentPrice - entryPrice) * (trade.quantity || 0);
         }
     }
@@ -414,23 +459,16 @@ async function managePositions() {
 // --- Main Loop ---
 
 async function startBot() {
-    console.log('🤖 Headless Bot Worker Started...');
-    console.log("🧠 NewsAI: Online & Ready");
+    console.log('🤖 Headless Bot Worker Started (Swing Strategy)...');
     console.log(`Targeting: ${TOP_ASSETS.join(', ')}`);
 
-    // Send startup notification
-    await telegramService.notifyStartup('EMA200 + ATR + BTC Protection + News Sentiment');
-
+    await telegramService.notifyStartup('Swing Box Breakout + ATR + Neural Veto');
 
     while (true) {
         try {
-            // Priority 1: Manage Risks (Sell before Buy)
             await managePositions();
-
-            // Priority 2: Look for opportunities
             await runMarketScan();
-
-            console.log('💤 Cycle complete. Sleeping...');
+            console.log(`💤 Cycle complete. Sleeping ${LOOP_INTERVAL / 60000}m...`);
         } catch (error: any) {
             console.error('❌ Critical Loop Error:', error);
         }
