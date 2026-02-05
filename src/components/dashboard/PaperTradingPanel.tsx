@@ -105,9 +105,7 @@ const PaperTradingPanel: React.FC = () => {
         fetchTrades();
     }, [activeTab, selectedDate]);
 
-    const handleCloseTrade = async (e: React.MouseEvent, trade: Trade) => {
-        e.stopPropagation();
-
+    const closePosition = async (trade: Trade) => {
         // Calculate P&L for closing
         const rawTicker = trade.ticker || '';
         const ticker = rawTicker.replace(/[^A-Z0-9]/gi, '').toUpperCase();
@@ -138,6 +136,7 @@ const PaperTradingPanel: React.FC = () => {
                 reason: reason
             };
 
+            // 1. PRIMARY: Try API (Uses Service Role bypass on backend)
             const response = await fetch(`/api/trades/${trade.id}/close`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -146,12 +145,39 @@ const PaperTradingPanel: React.FC = () => {
 
             if (response.ok) {
                 fetchTrades();
+                return;
+            }
+
+            console.warn("⚠️ API Close failed, attempting Emergency Supabase bypass...");
+
+            // 2. BACKUP: Direct Supabase Update (Bypass API if it's down or blocked)
+            const { error: sbError } = await supabase
+                .from('paper_trades')
+                .update({
+                    status: 'CLOSED',
+                    exit_price: Number(livePrice),
+                    final_pnl: Number(pnl),
+                    close_reason: `${reason} (EMERGENCY BYPASS)`,
+                    exit_time: new Date().toISOString()
+                })
+                .eq('id', trade.id);
+
+            if (!sbError) {
+                alert("✅ Posición cerrada mediante BYPASS DIRECTO (Supabase).");
+                fetchTrades();
             } else {
-                alert("Error al cerrar operación");
+                console.error("Supabase direct update failed:", sbError);
+                alert("❌ ERROR CRÍTICO: No se pudo cerrar la posición. Verifique permisos RLS o contacte soporte.");
             }
         } catch (e) {
-            console.error(e);
+            console.error("Catastrophic error during closePosition:", e);
+            alert("Fallo catastrófico en la ejecución del cierre.");
         }
+    };
+
+    const handleCloseTrade = (e: React.MouseEvent, trade: Trade) => {
+        e.stopPropagation();
+        closePosition(trade);
     };
 
     const handleRowClick = (ticker: string) => {

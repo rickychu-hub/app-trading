@@ -343,6 +343,37 @@ async def get_trades(status: str = "OPEN"):
             return resp.json()
         except: return []
 
+@app.put("/trades/{id}/close")
+async def close_trade(id: int, payload: dict):
+    if not SUPABASE_URL or not SUPABASE_KEY: 
+        return {"status": "error", "message": "Supabase credentials missing"}
+    
+    url = f"{SUPABASE_URL}/rest/v1/paper_trades?id=eq.{id}"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    from datetime import datetime
+    update_data = {
+        "status": "CLOSED",
+        "exit_price": payload.get("exit_price"),
+        "final_pnl": payload.get("final_pnl"),
+        "close_reason": payload.get("reason", "Manual Close"),
+        "exit_time": datetime.utcnow().isoformat()
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            # Supabase REST uses PATCH for updates
+            resp = await client.patch(url, json=update_data, headers=headers)
+            resp.raise_for_status()
+            return {"status": "success", "message": f"Trade {id} marked as CLOSED"}
+        except Exception as e:
+            print(f"❌ [API Error] Failed to close trade {id}: {str(e)}")
+            return {"status": "error", "message": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
