@@ -356,10 +356,15 @@ async def close_trade(id: int, payload: dict):
     }
     
     from datetime import datetime
+    final_pnl = payload.get("final_pnl", 0)
+    # Net Profit Calculation: Bruto * 0.80 if positive
+    net_profit = final_pnl * 0.80 if final_pnl > 0 else final_pnl
+
     update_data = {
         "status": "CLOSED",
         "exit_price": payload.get("exit_price"),
-        "final_pnl": payload.get("final_pnl"),
+        "final_pnl": final_pnl,
+        "net_profit": net_profit,
         "close_reason": payload.get("reason", "Manual Close"),
         "exit_time": datetime.utcnow().isoformat()
     }

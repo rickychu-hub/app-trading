@@ -11,6 +11,7 @@ interface ExecutiveDashboardProps {
     totalEquity: number;
     dailyPnL: number;
     dailyPnLPercent: number;
+    dailyNetPnL: number;
     loading?: boolean;
     onViewAllNews?: () => void;
 }
@@ -21,6 +22,7 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     totalEquity,
     dailyPnL,
     dailyPnLPercent,
+    dailyNetPnL,
     loading = false
 }) => {
     return (
@@ -32,6 +34,7 @@ const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 totalEquity={totalEquity}
                 dailyPnL={dailyPnL}
                 dailyPnLPercent={dailyPnLPercent}
+                dailyNetPnL={dailyNetPnL}
                 loading={loading}
             />
 

@@ -109,6 +109,7 @@ function App() {
           totalEquity={stats.totalEquity}
           dailyPnL={stats.dailyPnL}
           dailyPnLPercent={stats.dailyPnLPercent}
+          dailyNetPnL={stats.dailyNetPnL}
           loading={loading}
           onViewAllNews={() => setActiveView('newspage')}
         />

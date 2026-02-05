@@ -17,6 +17,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; // Secure Key for Server
 const LOOP_INTERVAL = 300000; // 5 minutes (more efficient for 1H strategy)
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
+const WATCH_ONLY = process.env.WATCH_ONLY !== 'false'; // Default to true (Watch-Only) for safety
 
 // Strategy Constants
 const TIMEFRAME = '1h';
@@ -27,6 +28,9 @@ const VOLUME_MULTIPLIER = 1.2;
 const FALLING_KNIFE_THRESHOLD = -5; // -5%
 const FALLING_KNIFE_LOOKBACK = 4;   // 4 hours
 const FREEZE_DURATION_MS = 12 * 60 * 60 * 1000; // 12 hours
+const COOLDOWN_DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
+const MIN_TAKE_PROFIT_PERCENT = 0.035; // 3.5%
+const TAX_RATE = 0.20; // 20%
 
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
@@ -170,8 +174,28 @@ async function executeTrade(
         return;
     }
 
-    // 1. Check if we already have an open trade
     const cleanTicker = ticker.replace('USDT', '').trim().toUpperCase();
+
+    // 1. Check for 4-Hour Cooldown (Last exit must be at least 4h ago)
+    const { data: lastClosed, error: cooldownError } = await supabase
+        .from('paper_trades')
+        .select('exit_time')
+        .eq('status', 'CLOSED')
+        .eq('ticker', cleanTicker)
+        .order('exit_time', { ascending: false })
+        .limit(1);
+
+    if (!cooldownError && lastClosed && lastClosed.length > 0) {
+        const lastExit = new Date(lastClosed[0].exit_time).getTime();
+        const timeSinceExit = Date.now() - lastExit;
+        if (timeSinceExit < COOLDOWN_DURATION_MS) {
+            const hRem = ((COOLDOWN_DURATION_MS - timeSinceExit) / 3600000).toFixed(1);
+            console.log(`⏳ COOLDOWN: ${cleanTicker} closed recently. Waiting ${hRem}h more.`);
+            return;
+        }
+    }
+
+    // 2. Check if we already have an open trade
 
     const { data: existingTrades, error: fetchError } = await supabase
         .from('paper_trades')
@@ -257,7 +281,10 @@ async function executeTrade(
             details += `\n<b>Take Profit:</b> $${takeProfitPrice.toFixed(2)} (+${tpPercent.toFixed(2)}%)`;
         }
 
-        await telegramService.notifyTrade('BUY', cleanTicker, price, details);
+        // --- HYBRID MODE: Alpha Entry Signal ---
+        await telegramService.sendAlphaEntrySignal(cleanTicker, price);
+        // Also keep the detailed log for the dev/admin
+        await telegramService.notifyTrade('BUY', cleanTicker, price, details + "\n[SIMULADO]");
     }
 }
 
@@ -376,7 +403,14 @@ async function runMarketScan() {
 
             // 6. Volatility Guard (ATR)
             const stopLossPrice = price - (atr * 2);
-            const takeProfitPrice = price + (atr * 3); // 1:1.5 Risk/Reward
+            let takeProfitPrice = price + (atr * 3); // 1:1.5 Risk/Reward
+
+            // Apply 3.5% TP FLOOR
+            const minTP = price * (1 + MIN_TAKE_PROFIT_PERCENT);
+            if (takeProfitPrice < minTP) {
+                console.log(`🎯 TP FLOOR: Raising TP for ${symbol} from $${takeProfitPrice.toFixed(2)} to $${minTP.toFixed(2)} (3.5% min)`);
+                takeProfitPrice = minTP;
+            }
 
             // 7. Neural Veto (Supabase News Integration)
             const newsAnalysis = await getLatestMarketSentiment(symbol);
@@ -475,30 +509,40 @@ async function managePositions() {
             const invested = trade.invested_amount || entryPrice;
             const quantity = trade.quantity || (invested / entryPrice);
 
-            // --- REAL BITGET API EXECUTION ---
-            try {
-                // Execute real sell order on Bitget
-                await bitgetApi.placeMarketSellOrder(symbol, quantity);
-                console.log(`✅ Bitget API: Sell order executed for ${symbol}`);
-            } catch (sellError: any) {
-                console.error(`❌ Bitget API SELL FAILED for ${trade.ticker}:`, sellError.message);
+            // --- REAL BITGET API EXECUTION (WATCH-ONLY BYPASS) ---
+            if (!WATCH_ONLY) {
+                try {
+                    // Execute real sell order on Bitget
+                    await bitgetApi.placeMarketSellOrder(symbol, quantity);
+                    console.log(`✅ Bitget API: Sell order executed for ${symbol}`);
+                } catch (sellError: any) {
+                    console.error(`❌ Bitget API SELL FAILED for ${trade.ticker}:`, sellError.message);
 
-                // URGENT Telegram alert for failed sale
-                await telegramService.notifyAlert(
-                    'VENTA FALLIDA',
-                    `🔴 <b>ERROR DE VENTA: Cierre manual requerido para [${trade.ticker}]</b>\n\n` +
-                    `<b>Razón:</b> ${sellError.message}\n` +
-                    `<b>Cantidad:</b> ${quantity.toFixed(4)} ${trade.ticker}\n` +
-                    `<b>Precio actual:</b> $${currentPrice.toFixed(2)}`
-                );
+                    // URGENT Telegram alert for failed sale
+                    await telegramService.notifyAlert(
+                        'VENTA FALLIDA',
+                        `🔴 <b>ERROR DE VENTA: Cierre manual requerido para [${trade.ticker}]</b>\n\n` +
+                        `<b>Razón:</b> ${sellError.message}\n` +
+                        `<b>Cantidad:</b> ${quantity.toFixed(4)} ${trade.ticker}\n` +
+                        `<b>Precio actual:</b> $${currentPrice.toFixed(2)}`
+                    );
 
-                // We do NOT mark it as CLOSED in DB if API call fails, so it stays OPEN for retry or manual intervention.
-                continue;
+                    // We do NOT mark it as CLOSED in DB if API call fails, so it stays OPEN for retry or manual intervention.
+                    continue;
+                }
+            } else {
+                console.log(`📡 [WATCH-ONLY] Skipping real Bitget sell for ${symbol}. Simulated exit proceeding.`);
             }
             // ---------------------------------
 
             const exitValue = quantity * currentPrice;
             const finalPnL = exitValue - invested;
+
+            // --- NET PROFIT CALCULATION ---
+            // Net = Gross - 20% (if gain)
+            const netPnL = finalPnL > 0 ? finalPnL * (1 - TAX_RATE) : finalPnL;
+            const grossPnLPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+            const netPnLPercent = finalPnL > 0 ? grossPnLPercent * (1 - TAX_RATE) : grossPnLPercent;
 
             const { error: closeError } = await supabase
                 .from('paper_trades')
@@ -507,6 +551,7 @@ async function managePositions() {
                     exit_price: currentPrice,
                     exit_time: new Date().toISOString(),
                     final_pnl: finalPnL,
+                    net_profit: netPnL, // Updated field
                     close_reason: reason
                 })
                 .eq('id', trade.id);
@@ -514,13 +559,16 @@ async function managePositions() {
             if (closeError) {
                 console.error(`❌ FAILED to close trade ${trade.id}:`, closeError.message);
             } else {
-                console.log(`✅ Trade ${trade.id} CLOSED successfully.`);
+                console.log(`✅ Trade ${trade.id} CLOSED successfully. Net PnL: $${netPnL.toFixed(2)}`);
 
-                const pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
-                const details = `<b>PnL:</b> $${finalPnL.toFixed(2)} (${pnlPercent.toFixed(2)}%)\n` +
+                const details = `<b>PnL Bruto:</b> $${finalPnL.toFixed(2)} (${grossPnLPercent.toFixed(2)}%)\n` +
+                    `<b>Beneficio Neto:</b> $${netPnL.toFixed(2)} (${netPnLPercent.toFixed(2)}%)\n` +
                     `<b>Reason:</b> ${reason}`;
 
-                await telegramService.notifyTrade('SELL', trade.ticker, currentPrice, details);
+                // --- HYBRID MODE: Alpha Exit Signal ---
+                await telegramService.sendAlphaExitSignal(trade.ticker, grossPnLPercent, netPnLPercent, reason);
+                // Also keep the detailed log for the dev/admin
+                await telegramService.notifyTrade('SELL', trade.ticker, currentPrice, details + "\n[SIMULADO]");
             }
         } else {
             currentLoopPnL += (currentPrice - entryPrice) * (trade.quantity || 0);

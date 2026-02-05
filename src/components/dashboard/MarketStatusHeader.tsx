@@ -8,6 +8,7 @@ interface MarketStatusHeaderProps {
     totalEquity: number;
     dailyPnL: number;
     dailyPnLPercent: number;
+    dailyNetPnL: number;
     loading?: boolean;
 }
 
@@ -17,6 +18,7 @@ const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
     totalEquity,
     dailyPnL,
     dailyPnLPercent,
+    dailyNetPnL,
     loading = false
 }) => {
     const isPositive = dailyPnL >= 0;
@@ -41,22 +43,31 @@ const MarketStatusHeader: React.FC<MarketStatusHeaderProps> = ({
             </div>
 
             {/* 2. Daily PnL */}
-            <div className="glass-panel p-3 md:p-4 rounded-xl border border-white/10 flex items-center gap-3 md:gap-4 relative overflow-hidden">
-                <div className="p-2 md:p-3 rounded-lg bg-white/5">
-                    {isPositive ? <TrendingUp size={20} className="md:w-6 md:h-6 text-green-500" /> : <TrendingDown size={20} className="md:w-6 md:h-6 text-red-500" />}
-                </div>
-                <div>
-                    <p className="text-gray-400 text-[10px] md:text-xs font-bold uppercase">PnL Hoy</p>
-                    <div className="flex items-end gap-1 md:gap-2">
+            <div className={`glass-panel p-3 md:p-4 rounded-xl border flex flex-col gap-2 relative overflow-hidden ${isPositive ? 'border-green-500/20' : 'border-red-500/20'}`}>
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-white/5">
+                        {isPositive ? <TrendingUp size={20} className="md:w-6 md:h-6 text-green-500" /> : <TrendingDown size={20} className="md:w-6 md:h-6 text-red-500" />}
+                    </div>
+                    <div>
+                        <p className="text-gray-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">P&L Diario (Bruto)</p>
                         <h3 className={`text-xl md:text-2xl font-bold tracking-tight ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
                             {loading ? '...' : `${isPositive ? '+' : ''}$${dailyPnL.toLocaleString()}`}
                         </h3>
-                        {!loading && (
-                            <span className={`text-[10px] md:text-xs mb-0.5 md:mb-1 font-bold ${isPositive ? 'text-green-500/80' : 'text-red-500/80'}`}>
-                                ({isPositive ? '+' : ''}{dailyPnLPercent.toFixed(2)}%)
-                            </span>
-                        )}
                     </div>
+                </div>
+
+                <div className="flex justify-between items-center bg-black/20 p-2 rounded-lg border border-white/5">
+                    <div className="flex flex-col">
+                        <span className="text-[9px] text-gray-500 font-bold uppercase">Beneficio Neto</span>
+                        <span className={`text-sm font-bold ${dailyNetPnL >= 0 ? 'text-accent' : 'text-red-400'}`}>
+                            {loading ? '...' : `${dailyNetPnL >= 0 ? '+' : ''}$${dailyNetPnL.toLocaleString()}`}
+                        </span>
+                    </div>
+                    {!loading && (
+                        <div className={`px-2 py-0.5 rounded text-[10px] font-bold ${isPositive ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-400'}`}>
+                            {isPositive ? '+' : ''}{dailyPnLPercent.toFixed(2)}%
+                        </div>
+                    )}
                 </div>
             </div>
 

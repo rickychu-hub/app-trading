@@ -61,6 +61,32 @@ class TelegramService {
     }
 
     /**
+     * Send Alpha Entry Signal for Híbrido Mode
+     */
+    async sendAlphaEntrySignal(ticker: string, price: number): Promise<void> {
+        const message = `🚀 <b>SEÑAL DE ENTRADA ALPHA - ${ticker}</b>\n\n` +
+            `Acción del Bot: <b>COMPRA SIMULADA</b> ejecutada.\n` +
+            `<b>Precio:</b> $${price.toFixed(2)}\n\n` +
+            `Sugerencia: Evaluar compra manual en <b>Trade Republic</b>.`;
+
+        await this.notify(message);
+    }
+
+    /**
+     * Send Alpha Exit Signal for Híbrido Mode
+     */
+    async sendAlphaExitSignal(ticker: string, grossPnLPercent: number, netPnLPercent: number, reason: string): Promise<void> {
+        const message = `🏁 <b>CIERRE DE POSICIÓN - ${ticker}</b>\n\n` +
+            `<b>Resultado Bruto Simulado:</b> ${grossPnLPercent >= 0 ? '+' : ''}${grossPnLPercent.toFixed(2)}%\n` +
+            `<b>Beneficio Neto Estimado:</b> ${netPnLPercent >= 0 ? '+' : ''}${netPnLPercent.toFixed(2)}%\n` +
+            `<i>(Tras comisiones e impuestos)</i>\n\n` +
+            `<b>Motivo:</b> ${reason}\n\n` +
+            `Sugerencia: Evaluar venta/cierre en <b>Trade Republic</b>.`;
+
+        await this.notify(message);
+    }
+
+    /**
      * Send a critical alert
      */
     async notifyAlert(title: string, description: string): Promise<void> {

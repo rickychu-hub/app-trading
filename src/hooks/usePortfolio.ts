@@ -8,6 +8,7 @@ export interface PortfolioStats {
     totalEquity: number;        // cashBalance + investedCapital
     dailyPnL: number;          // PnL realizado + no realizado del día
     dailyPnLPercent: number;   // Porcentaje del PnL diario
+    dailyNetPnL: number;       // PnL después de impuestos/comisiones
 }
 
 export const usePortfolio = () => {
@@ -16,7 +17,8 @@ export const usePortfolio = () => {
         investedCapital: 0,
         totalEquity: 0,
         dailyPnL: 0,
-        dailyPnLPercent: 0
+        dailyPnLPercent: 0,
+        dailyNetPnL: 0
     });
     const [loading, setLoading] = useState(true);
 
@@ -59,12 +61,16 @@ export const usePortfolio = () => {
             // 3. Calculate Realized PnL (Closed Trades Today)
             const { data: closedTrades } = await supabase
                 .from('paper_trades')
-                .select('final_pnl')
+                .select('final_pnl, net_profit')
                 .eq('status', 'CLOSED')
                 .gte('exit_time', startOfDay.toISOString());
 
             const realizedPnL = closedTrades
                 ? closedTrades.reduce((sum, t) => sum + (t.final_pnl || 0), 0)
+                : 0;
+
+            const realizedNetPnL = closedTrades
+                ? closedTrades.reduce((sum, t) => sum + (t.net_profit || (t.final_pnl || 0)), 0)
                 : 0;
 
             // 4. Calculate Total Equity
@@ -79,6 +85,7 @@ export const usePortfolio = () => {
             // 5. Daily PnL = Realized PnL from closed trades
             // (Unrealized would require live prices which we don't have in this simple version)
             const dailyPnL = realizedPnL;
+            const dailyNetPnL = realizedNetPnL;
             const dailyPnLPercent = startBalance > 0 ? (dailyPnL / startBalance) * 100 : 0;
 
             setStats({
@@ -86,7 +93,8 @@ export const usePortfolio = () => {
                 investedCapital: investedCapital,
                 totalEquity: totalEquity,
                 dailyPnL: dailyPnL,
-                dailyPnLPercent: dailyPnLPercent
+                dailyPnLPercent: dailyPnLPercent,
+                dailyNetPnL: dailyNetPnL
             });
         } catch (error) {
             console.error("Error fetching portfolio stats:", error);

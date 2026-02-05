@@ -25,6 +25,7 @@ interface Trade {
     // Closed trade fields
     exit_price?: number;
     final_pnl?: number;
+    net_profit?: number; // New field for after-tax profit
     close_reason?: string;
     exit_time?: string;
 }
@@ -151,12 +152,15 @@ const PaperTradingPanel: React.FC = () => {
             console.warn("⚠️ API Close failed, attempting Emergency Supabase bypass...");
 
             // 2. BACKUP: Direct Supabase Update (Bypass API if it's down or blocked)
+            const net_profit = Number(pnl) > 0 ? Number(pnl) * 0.80 : Number(pnl);
+
             const { error: sbError } = await supabase
                 .from('paper_trades')
                 .update({
                     status: 'CLOSED',
                     exit_price: Number(livePrice),
                     final_pnl: Number(pnl),
+                    net_profit: net_profit,
                     close_reason: `${reason} (EMERGENCY BYPASS)`,
                     exit_time: new Date().toISOString()
                 })
@@ -563,24 +567,30 @@ const PaperTradingPanel: React.FC = () => {
                                 // HISTORY TABLE
                                 <div className="overflow-x-auto space-y-4">
                                     {/* Summary Aggregator */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                                         <div className="bg-white/5 p-4 rounded-lg border border-white/10 flex flex-col items-center">
-                                            <span className="text-gray-400 text-xs uppercase">Beneficio Total</span>
-                                            <span className={`text-2xl font-bold ${displayedTrades.reduce((acc, t) => acc + (t.final_pnl || 0), 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                            <span className="text-gray-400 text-xs uppercase">Beneficio Bruto</span>
+                                            <span className={`text-xl font-bold ${displayedTrades.reduce((acc, t) => acc + (t.final_pnl || 0), 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                                 ${displayedTrades.reduce((acc, t) => acc + (t.final_pnl || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                        <div className="bg-white/5 p-4 rounded-lg border border-accent/20 flex flex-col items-center">
+                                            <span className="text-accent text-xs uppercase font-bold">Beneficio Neto</span>
+                                            <span className={`text-xl font-bold ${displayedTrades.reduce((acc, t) => acc + (t.net_profit || (t.final_pnl || 0)), 0) >= 0 ? 'text-accent' : 'text-red-400'}`}>
+                                                ${displayedTrades.reduce((acc, t) => acc + (t.net_profit || (t.final_pnl || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                             </span>
                                         </div>
                                         <div className="bg-white/5 p-4 rounded-lg border border-white/10 flex flex-col items-center">
                                             <span className="text-gray-400 text-xs uppercase">Win Rate</span>
-                                            <span className="text-2xl font-bold text-accent">
+                                            <span className="text-xl font-bold text-white">
                                                 {displayedTrades.length > 0
                                                     ? ((displayedTrades.filter(t => (t.final_pnl || 0) > 0).length / displayedTrades.length) * 100).toFixed(0)
                                                     : 0}%
                                             </span>
                                         </div>
                                         <div className="bg-white/5 p-4 rounded-lg border border-white/10 flex flex-col items-center">
-                                            <span className="text-gray-400 text-xs uppercase">Trades Cerrados</span>
-                                            <span className="text-2xl font-bold text-white">{displayedTrades.length}</span>
+                                            <span className="text-gray-400 text-xs uppercase">Trades</span>
+                                            <span className="text-xl font-bold text-white">{displayedTrades.length}</span>
                                         </div>
                                     </div>
 
@@ -592,7 +602,8 @@ const PaperTradingPanel: React.FC = () => {
                                                 <th className="py-4 px-4">Ticker</th>
                                                 <th className="py-4 px-4 text-right">Entrada</th>
                                                 <th className="py-4 px-4 text-right">Salida</th>
-                                                <th className="py-4 px-4 text-right">P&L Final</th>
+                                                <th className="py-4 px-4 text-right">P&L Bruto</th>
+                                                <th className="py-4 px-4 text-right">P&L Neto</th>
                                                 <th className="py-4 px-4 text-right">Razón</th>
                                             </tr>
                                         </thead>
@@ -632,6 +643,9 @@ const PaperTradingPanel: React.FC = () => {
                                                         </td>
                                                         <td className={`py-4 px-4 font-mono text-right font-bold ${colorClass}`}>
                                                             {pnl >= 0 ? '+' : ''}${pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className={`py-4 px-4 font-mono text-right font-bold ${trade.net_profit && trade.net_profit >= 0 ? 'text-accent' : trade.net_profit ? 'text-red-400' : 'text-gray-500'}`}>
+                                                            {trade.net_profit ? (trade.net_profit >= 0 ? '+' : '') + '$' + trade.net_profit.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}
                                                         </td>
                                                         <td className="py-4 px-4 text-right text-sm">
                                                             <span className={`px-2 py-1 rounded text-xs border font-bold ${trade.close_reason?.includes('PROFIT') || trade.close_reason?.includes('Take Profit') ? 'border-green-500/30 text-green-300 bg-green-500/10' :
