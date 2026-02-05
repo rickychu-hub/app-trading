@@ -6,6 +6,7 @@ import { RSI, EMA, ATR } from 'technicalindicators';
 import { RiskManager } from './RiskManager';
 import { NewsAuditor } from './skills/NewsAuditor';
 import { ExchangeAPI } from './utils/ExchangeAPI';
+import { bitgetApi } from './utils/BitgetAPI';
 import { telegramService } from './utils/TelegramService';
 import dotenv from 'dotenv';
 
@@ -265,11 +266,8 @@ async function runMarketScan() {
     // 0. Safety Check via Risk Manager
     const riskStatus = await RiskManager.getInstance().checkTradeStatus(globalUnrealizedPnL);
 
-    if (!riskStatus.canTrade) {
-        console.warn(`🛑 MARKET SCAN SKIPPED: ${riskStatus.reason}`);
-        console.log(`📉 Daily PnL: $${riskStatus.dailyPnL.toFixed(2)} (${riskStatus.dailyPnLPercent.toFixed(2)}%)`);
-        return;
-    }
+    // We still check risk status but the scan loop will handle the "canTrade" flag specifically for BUYS.
+    // However, the user wants the SCAN to be aborted but POSITIONS managed first.
 
     const anyFrozen = TOP_ASSETS.some(s => {
         const unfreezeAt = frozenAssets.get(s);
@@ -297,18 +295,17 @@ async function runMarketScan() {
             console.log(`👑 BTC is dumping (${btcChange1h.toFixed(2)}%). Freezing all buys. 🚫`);
             console.log(`⏸️  Market scan aborted. Waiting for BTC recovery...\n`);
 
-            // Send Telegram alert ONLY if not already active
             if (!isDumpingAlertActive) {
                 isDumpingAlertActive = true;
                 await telegramService.notifyAlert(
                     'BTC Dumping - Trading Paused',
                     `👑 Bitcoin está cayendo <b>${btcChange1h.toFixed(2)}%</b> en la última hora.\n\n` +
-                    `Todas las compras están congeladas hasta que BTC se recupere.\n\n` +
+                    `Todas las nuevas compras están congeladas hasta que BTC se recupere. <b>Las posiciones abiertas siguen siendo monitoreadas.</b>\n\n` +
                     `<b>Precio BTC:</b> $${btcCurrentPrice.toFixed(2)}`
                 );
             }
 
-            return; // Skip entire scan cycle
+            return; // Exit scan cycle AFTER managePositions has already run in the main loop
         } else {
             // Check for recovery
             if (isDumpingAlertActive) {
@@ -399,7 +396,11 @@ async function runMarketScan() {
             }
 
             // 8. Execute Trade
-            await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.title, stopLossPrice, takeProfitPrice);
+            if (riskStatus.canTrade) {
+                await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.title, stopLossPrice, takeProfitPrice);
+            } else {
+                console.warn(`🛑 TRADE SKIPPED for ${symbol}: ${riskStatus.reason}`);
+            }
 
         } else {
             if (isBreakout) console.log(`⚠️ Breakout without volume confirmation for ${symbol}.`);
@@ -473,6 +474,29 @@ async function managePositions() {
 
             const invested = trade.invested_amount || entryPrice;
             const quantity = trade.quantity || (invested / entryPrice);
+
+            // --- REAL BITGET API EXECUTION ---
+            try {
+                // Execute real sell order on Bitget
+                await bitgetApi.placeMarketSellOrder(symbol, quantity);
+                console.log(`✅ Bitget API: Sell order executed for ${symbol}`);
+            } catch (sellError: any) {
+                console.error(`❌ Bitget API SELL FAILED for ${trade.ticker}:`, sellError.message);
+
+                // URGENT Telegram alert for failed sale
+                await telegramService.notifyAlert(
+                    'VENTA FALLIDA',
+                    `🔴 <b>ERROR DE VENTA: Cierre manual requerido para [${trade.ticker}]</b>\n\n` +
+                    `<b>Razón:</b> ${sellError.message}\n` +
+                    `<b>Cantidad:</b> ${quantity.toFixed(4)} ${trade.ticker}\n` +
+                    `<b>Precio actual:</b> $${currentPrice.toFixed(2)}`
+                );
+
+                // We do NOT mark it as CLOSED in DB if API call fails, so it stays OPEN for retry or manual intervention.
+                continue;
+            }
+            // ---------------------------------
+
             const exitValue = quantity * currentPrice;
             const finalPnL = exitValue - invested;
 
