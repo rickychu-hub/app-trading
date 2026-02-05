@@ -68,10 +68,6 @@ interface Candle {
 
 // --- Analysis Services (Mirrored from Frontend) ---
 
-// --- Analysis Services (Mirrored from Frontend) ---
-
-// fetchCandles removed, using ExchangeAPI directly
-
 function detectConsolidation(candles: Candle[]) {
     if (candles.length < CONSOLIDATION_PERIODS) return { valid: false, high: 0, low: 0, volatility: 0 };
 
@@ -166,8 +162,10 @@ async function executeTrade(
     amount: number,
     sentimentScore: number = 0,
     newsSummary: string = '',
-    stopLossPrice?: number,
-    takeProfitPrice?: number
+    stop_loss?: number,
+    take_profit?: number,
+    technical_reason?: string,
+    targetNetPnLPercent?: number
 ) {
     if (!price || price <= 0) {
         console.warn(`⚠️ SKIPPING BUY: Invalid Price $${price} for ${ticker}`);
@@ -259,8 +257,8 @@ async function executeTrade(
         news_id: 'SWING-BOX',
         news_sentiment_score: sentimentScore,
         news_summary: newsSummary,
-        stop_loss: stopLossPrice,
-        take_profit: takeProfitPrice
+        stop_loss: stop_loss,
+        take_profit: take_profit
     }]);
 
     if (error) {
@@ -271,18 +269,18 @@ async function executeTrade(
         let details = `<b>Cantidad:</b> ${quantity.toFixed(4)} ${cleanTicker}\n` +
             `<b>Inversión:</b> $${amount.toFixed(2)}`;
 
-        if (stopLossPrice) {
-            const slPercent = ((price - stopLossPrice) / price) * 100;
-            details += `\n<b>Stop Loss:</b> $${stopLossPrice.toFixed(2)} (-${slPercent.toFixed(2)}%)`;
+        if (stop_loss) {
+            const slPercent = ((price - stop_loss) / price) * 100;
+            details += `\n<b>Stop Loss:</b> $${stop_loss.toFixed(2)} (-${slPercent.toFixed(2)}%)`;
         }
 
-        if (takeProfitPrice) {
-            const tpPercent = ((takeProfitPrice - price) / price) * 100;
-            details += `\n<b>Take Profit:</b> $${takeProfitPrice.toFixed(2)} (+${tpPercent.toFixed(2)}%)`;
+        if (take_profit) {
+            const tpPercent = ((take_profit - price) / price) * 100;
+            details += `\n<b>Take Profit:</b> $${take_profit.toFixed(2)} (+${tpPercent.toFixed(2)}%)`;
         }
 
         // --- HYBRID MODE: Alpha Entry Signal ---
-        await telegramService.sendAlphaEntrySignal(cleanTicker, price);
+        await telegramService.sendAlphaEntrySignal(cleanTicker, price, technical_reason || 'Indicadores Técnicos', targetNetPnLPercent);
         // Also keep the detailed log for the dev/admin
         await telegramService.notifyTrade('BUY', cleanTicker, price, details + "\n[SIMULADO]");
     }
@@ -324,12 +322,13 @@ async function runMarketScan() {
 
             if (!isDumpingAlertActive) {
                 isDumpingAlertActive = true;
+                // SILENCED: Internal logic remains, but no notification sent to reduce noise
+                /*
                 await telegramService.notifyAlert(
                     'BTC Dumping - Trading Paused',
-                    `👑 Bitcoin está cayendo <b>${btcChange1h.toFixed(2)}%</b> en la última hora.\n\n` +
-                    `Todas las nuevas compras están congeladas hasta que BTC se recupere. <b>Las posiciones abiertas siguen siendo monitoreadas.</b>\n\n` +
-                    `<b>Precio BTC:</b> $${btcCurrentPrice.toFixed(2)}`
+                    ...
                 );
+                */
             }
 
             return; // Exit scan cycle AFTER managePositions has already run in the main loop
@@ -337,12 +336,13 @@ async function runMarketScan() {
             // Check for recovery
             if (isDumpingAlertActive) {
                 isDumpingAlertActive = false;
+                // SILENCED: Internal logic remains, but no notification sent
+                /*
                 await telegramService.notifyAlert(
                     'BTC Recovered - Trading Resumed',
-                    `✅ Bitcoin se está estabilizando (Cambio 1h: ${btcChange1h.toFixed(2)}%).\n\n` +
-                    `El escaneo de mercado y las compras se han reanudado.\n\n` +
-                    `<b>Precio BTC:</b> $${btcCurrentPrice.toFixed(2)}`
+                    ...
                 );
+                */
             }
             console.log(`✅ BTC sentiment: ${btcChange1h >= 0 ? 'Bullish' : 'Neutral'}. Proceeding with scan.\n`);
         }
@@ -365,7 +365,7 @@ async function runMarketScan() {
         if (candles.length < 50) continue;
 
         // 2. Analyze indicators
-        const { price, prevPrice, atr, ema200, volSMA, currentVolume } = calculateIndicators(candles);
+        const { price, prevPrice, rsiCurrent, atr, ema200, volSMA, currentVolume } = calculateIndicators(candles);
 
         // 3. Falling Knife Detection (5% drop in 4h)
         const price4hAgo = candles[candles.length - 5]?.close || candles[0].close;
@@ -374,11 +374,13 @@ async function runMarketScan() {
         if (change4h <= FALLING_KNIFE_THRESHOLD) {
             console.warn(`🔪 FALLING KNIFE: ${symbol} dropped ${change4h.toFixed(2)}% in 4h. Freezing for 12h.`);
             frozenAssets.set(symbol, Date.now() + FREEZE_DURATION_MS);
+            // SILENCED: Notify alert removed to focus on entry/exit signals only
+            /*
             await telegramService.notifyAlert(
                 `Falling Knife - ${symbol}`,
-                `⚠️ <b>${symbol}</b> ha caído un <b>${change4h.toFixed(2)}%</b> en 4 horas.\n` +
-                `Congelado por 12 horas para evitar operar en caída libre.`
+                ...
             );
+            */
             continue;
         }
 
@@ -416,7 +418,7 @@ async function runMarketScan() {
             const newsAnalysis = await getLatestMarketSentiment(symbol);
 
             if (newsAnalysis.veto === true || newsAnalysis.score < -0.6) {
-                const reason = newsAnalysis.veto ? "Veto Explícito (n8n)" : `Sentimiento Bajista (${newsAnalysis.score})`;
+                const reason = newsAnalysis.veto ? "Veto Explicit (n8n)" : `Sentimiento Bajista (${newsAnalysis.score})`;
                 console.log(`⛔ NEURAL VETO: Trade for ${symbol} cancelled. Reason: ${reason}`);
 
                 await telegramService.notifyAlert(
@@ -431,7 +433,22 @@ async function runMarketScan() {
 
             // 8. Execute Trade
             if (riskStatus.canTrade) {
-                await executeTrade(symbol, price, 1000, newsAnalysis.score, newsAnalysis.title, stopLossPrice, takeProfitPrice);
+                const amount = 500; // Fixed size per trade as requested
+                const technicalReason = `RSI ${rsiCurrent.toFixed(1)} + Caja Confirmada`;
+                const grossTPPercent = ((takeProfitPrice - price) / price) * 100;
+                const targetNetPnLPercent = grossTPPercent * 0.80;
+
+                await executeTrade(
+                    symbol,
+                    price,
+                    amount,
+                    newsAnalysis.score,
+                    newsAnalysis.title,
+                    stopLossPrice,
+                    takeProfitPrice,
+                    technicalReason,
+                    targetNetPnLPercent
+                );
             } else {
                 console.warn(`🛑 TRADE SKIPPED for ${symbol}: ${riskStatus.reason}`);
             }

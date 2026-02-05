@@ -63,11 +63,13 @@ class TelegramService {
     /**
      * Send Alpha Entry Signal for Híbrido Mode
      */
-    async sendAlphaEntrySignal(ticker: string, price: number): Promise<void> {
-        const message = `🚀 <b>SEÑAL DE ENTRADA ALPHA - ${ticker}</b>\n\n` +
-            `Acción del Bot: <b>COMPRA SIMULADA</b> ejecutada.\n` +
-            `<b>Precio:</b> $${price.toFixed(2)}\n\n` +
-            `Sugerencia: Evaluar compra manual en <b>Trade Republic</b>.`;
+    async sendAlphaEntrySignal(ticker: string, price: number, reason: string, targetNetPnLPercent?: number): Promise<void> {
+        const message = `🚀 <b>COMPRA ALPHA: ${ticker}</b>\n\n` +
+            `Acción: <b>COMPRA</b> en Trade Republic\n` +
+            `Precio: <b>$${price.toLocaleString()}</b>\n` +
+            `Motivo: <b>${reason}</b>\n\n` +
+            (targetNetPnLPercent ? `🎯 <b>Objetivo Neto: +${targetNetPnLPercent.toFixed(2)}%</b>\n` : '') +
+            `<i>Simulación Autónoma: Activa ✅</i>`;
 
         await this.notify(message);
     }
@@ -76,12 +78,11 @@ class TelegramService {
      * Send Alpha Exit Signal for Híbrido Mode
      */
     async sendAlphaExitSignal(ticker: string, grossPnLPercent: number, netPnLPercent: number, reason: string): Promise<void> {
-        const message = `🏁 <b>CIERRE DE POSICIÓN - ${ticker}</b>\n\n` +
-            `<b>Resultado Bruto Simulado:</b> ${grossPnLPercent >= 0 ? '+' : ''}${grossPnLPercent.toFixed(2)}%\n` +
-            `<b>Beneficio Neto Estimado:</b> ${netPnLPercent >= 0 ? '+' : ''}${netPnLPercent.toFixed(2)}%\n` +
-            `<i>(Tras comisiones e impuestos)</i>\n\n` +
-            `<b>Motivo:</b> ${reason}\n\n` +
-            `Sugerencia: Evaluar venta/cierre en <b>Trade Republic</b>.`;
+        const message = `🏁 <b>SEÑAL DE VENTA: ${ticker}</b>\n\n` +
+            `Acción: <b>CERRAR POSICIÓN</b> en Trade Republic\n` +
+            `Motivo: <b>${reason}</b>\n\n` +
+            `📊 <b>Neto Estimado: ${netPnLPercent >= 0 ? '+' : ''}${netPnLPercent.toFixed(2)}%</b>\n` +
+            `<i>(Bruto: ${grossPnLPercent.toFixed(2)}%)</i>`;
 
         await this.notify(message);
     }
